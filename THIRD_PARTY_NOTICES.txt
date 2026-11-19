@@ -1,0 +1,67 @@
+================================================================================
+AGGROMETER LICENSE
+================================================================================
+AggroMeter is released under the MIT License.
+Copyright (c) 2026 Mynou (Mynoush)
+
+See the LICENSE file in the repository root for the full MIT License text.
+
+================================================================================
+VISUAL INSPIRATION & MEDIA CREDITS
+================================================================================
+- Visual Inspiration: Selected nameplate bar styling aesthetics and bundled
+  typography choices in AggroMeter were visually inspired by the World of
+  Warcraft addon Platynator (by plusmouse) and the broader World of Warcraft
+  LibSharedMedia-3.0 community ecosystem.
+- Typography: Bundled fonts in Media\Fonts\ include open-source typefaces from
+  Google Fonts and open-source font authors distributed under permissive
+  licenses such as the SIL Open Font License (OFL) 1.1 and Apache License 2.0,
+  or freely shared community font packs.
+- Bar Textures: Bundled textures in Media\Textures\ include clean status-bar
+  fill textures and community SharedMedia-style bar styles.
+- Sound Cues: Bundled audio cues in Sounds\ are included strictly for
+  non-commercial in-game alert playback.
+
+================================================================================
+NON-COMMERCIAL USE & COPYRIGHT DISCLAIMER (RIGHTS HOLDER NOTICE)
+================================================================================
+AggroMeter is provided strictly free of charge, without monetization, ads, or
+paywalls, in accordance with Blizzard Entertainment's World of Warcraft AddOn
+Development Policy. World of Warcraft and related Blizzard assets remain
+trademarks and property of Blizzard Entertainment, Inc.
+
+No ownership or exclusive rights are claimed by this project over any
+third-party fonts, textures, sounds, names, or trademarks included or
+referenced herein.
+
+If you are the copyright holder or rightful author of any asset included in
+this repository and believe its inclusion or attribution needs adjustment or
+removal, please open an issue at:
+  https://github.com/Mynoush/AggroMeter/issues
+Upon notice, the asset will be promptly updated, re-attributed, or removed.
+
+================================================================================
+THIRD-PARTY LIBRARIES & DATA
+================================================================================
+Distance-range item data is derived from LibRangeCheck-3.0 by The WoWUIDev Community.
+https://github.com/WeakAuras/LibRangeCheck-3.0
+
+MIT License
+Copyright (c) 2023 The WoWUIDev Community
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.

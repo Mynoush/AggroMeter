@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: Aggro|cff62d8ffMeter|r
+## Notes: Nameplate proximity & pull-radius bar with full in-game GUI, 41 bar styles, 23 fonts, smooth bars, combat & declutter filters, minimap button, and EN/PT-BR support.
+## Author: Mynou
+## Version: 1.0.0
+## SavedVariables: AggroMeterDB
+## X-Curse-Project-ID: 1816609
+## X-License: MIT
+## IconTexture: Interface\AddOns\AggroMeter\Media\Textures\icon.tga
+## AddonCompartmentFunc: AggroMeter_OnAddonCompartmentClick
+
+AggroMeter_Overrides.lua
+AggroMeter.lua

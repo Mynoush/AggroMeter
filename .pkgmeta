@@ -1,0 +1,6 @@
+package-as: AggroMeter
+
+ignore:
+  - CURSEFORGE_DESCRIPTION.md
+  - .gitignore
+  - logo.png
