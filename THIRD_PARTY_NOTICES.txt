@@ -19,8 +19,10 @@ VISUAL INSPIRATION & MEDIA CREDITS
   or freely shared community font packs.
 - Bar Textures: Bundled textures in Media\Textures\ include clean status-bar
   fill textures and community SharedMedia-style bar styles.
-- Sound Cues: Bundled audio cues in Sounds\ are included strictly for
-  non-commercial in-game alert playback.
+- Sound Cues: Tiered approach tones in Sounds\ (margin_soft.ogg,
+  margin_mid.ogg, margin_danger.ogg) are simple non-commercial UI tones, while
+  stealth pre-detection cues use native World of Warcraft client SoundKits via
+  PlaySound() (no third-party stealth audio file is distributed).
 
 ================================================================================
 NON-COMMERCIAL USE & COPYRIGHT DISCLAIMER (RIGHTS HOLDER NOTICE)

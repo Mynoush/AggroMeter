@@ -1,5 +1,5 @@
 local addonName = ...
-local ADDON_VERSION = "1.0.0"
+local ADDON_VERSION = "1.1.0"
 
 local UPDATE_INTERVAL = 0.10
 local DISPLAY_STAGES = 20
@@ -19,7 +19,11 @@ local ADDON_ICON = MEDIA_PATH .. "Media\\Textures\\icon.tga"
 local SOUND_SOFT = MEDIA_PATH .. "Sounds\\margin_soft.ogg"
 local SOUND_MID = MEDIA_PATH .. "Sounds\\margin_mid.ogg"
 local SOUND_DANGER = MEDIA_PATH .. "Sounds\\margin_danger.ogg"
-local SOUND_STEALTH_NOTICE = MEDIA_PATH .. "Sounds\\stealth_notice.ogg"
+
+local NATIVE_SOUND_SOFT    = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856
+local NATIVE_SOUND_MID     = SOUNDKIT and SOUNDKIT.READY_CHECK or 8960
+local NATIVE_SOUND_DANGER  = SOUNDKIT and SOUNDKIT.RAID_WARNING or 8959
+local NATIVE_SOUND_STEALTH = SOUNDKIT and SOUNDKIT.ALARM_CLOCK_WARNING_3 or 12867
 
 local function SanitizeMediaPath(path)
     if type(path) ~= "string" then return path end
@@ -559,15 +563,19 @@ local defaults = {
     enabled = true,
     showText = true,
     statusText = false,
+    compactText = false,
     warningEnabled = true,
     alertsEnabled = true,
     soundEnabled = true,
+    useNativeSounds = false,
     pullAlertEnabled = true,
     stealthNoticeEnabled = true,
     alertButtonPoint = "CENTER",
     alertButtonRelativePoint = "CENTER",
     alertButtonX = 145,
     alertButtonY = -155,
+    barPosition = "below",
+    barAlpha = 1.0,
     scale = 1.0,
     width = DEFAULT_WIDTH,
     height = DEFAULT_HEIGHT,
@@ -620,7 +628,9 @@ local STRINGS = {
         TAB_ALERTS           = "Alerts & Text",
         TAB_VISIBILITY       = "Visibility",
         -- Section Headers
-        SEC_DIMENSIONS       = "Dimensions & Update Speed",
+        SEC_PREVIEW          = "Live Preview",
+        PREVIEW_HINT         = "Click bar to cycle: SAFE / CAUTION / DANGER / AGGRO!",
+        SEC_DIMENSIONS       = "Dimensions, Position & Speed",
         SEC_STYLE            = "Bar Texture & Typography",
         SEC_BARTEXT          = "General & Bar Text",
         SEC_SCREENALERTS     = "Screen & Sound Warnings",
@@ -638,8 +648,13 @@ local STRINGS = {
         DESC_HEIGHT          = "Adjusts the vertical thickness of the aggro bar.",
         SLIDER_SCALE         = "Bar Scale",
         DESC_SCALE           = "Multiplies the overall size of the bar and its text.",
+        SLIDER_ALPHA         = "Bar Opacity",
+        DESC_ALPHA           = "Adjusts the base transparency of enemy nameplate bars.",
         SLIDER_UPDATERATE    = "Update Rate",
         DESC_UPDATERATE      = "How many times per second distance checks run. Higher values react faster.",
+        BTN_POS_BELOW        = "Position: Below Nameplate",
+        BTN_POS_ABOVE        = "Position: Above Nameplate",
+        DESC_BTN_POS         = "Anchors the AggroMeter bar below or above the enemy nameplate health bar.",
         -- Font & Texture section
         FONT_LABEL           = "Bar Font:",
         FONT_SELECT_BTN      = "Font: %s",
@@ -675,12 +690,20 @@ local STRINGS = {
         DESC_SHOWTEXT        = "Displays remaining safety margin and estimated aggro radius on the bar.",
         CHECK_STATUSTEXT     = "Show State Prefix (SAFE / CAUTION)",
         DESC_STATUSTEXT      = "Adds SAFE or CAUTION before the distance numbers on the bar.",
-        CHECK_WARNING        = "5m Proximity Warning (Target)",
-        DESC_WARNING         = "Shows a raid-style warning and sound when your current target is within 5m of pulling.",
+        CHECK_COMPACTTEXT    = "Compact Text (Margin Only)",
+        DESC_COMPACTTEXT     = "Displays only the remaining safety margin without repeating the total aggro radius.",
+        CHECK_WARNING        = "5 yd / 5m Proximity Warning (Target)",
+        DESC_WARNING         = "Shows a raid-style warning and sound when your current target is within 5 yards / meters of pulling.",
         CHECK_PULLALERT      = "Screen Pull Alert (AGGRO!)",
         DESC_PULLALERT       = "Flashes 'AGGRO! - Mob Name' in the center of the screen when you pull a mob.",
         CHECK_STEALTH        = "Stealth Detection Warning (!)",
         DESC_STEALTH         = "For Rogues/Druids in stealth: flashes a red '!' before entering a mob's detection radius.",
+        CHECK_NATIVESOUNDS   = "Use WoW Native Sounds Only",
+        DESC_NATIVESOUNDS   = "Uses built-in World of Warcraft client SoundKits instead of bundled audio files.",
+        BTN_TEST_ALERT       = "Test Alert & Sound",
+        DESC_TEST_ALERT      = "Previews the center-screen proximity warning banner and plays the danger alert audio.",
+        BTN_TEST_STEALTH     = "Test Stealth Cue (!)",
+        DESC_TEST_STEALTH    = "Previews the crimson stealth pre-detection '!' indicator and its alert sound.",
         CHECK_INVERTBAR      = "Fill Bar on Danger",
         DESC_INVERTBAR       = "Inverts the bar: starts empty when safe and fills up in red as you get closer to pulling.",
         CHECK_AGGROGRAPHIC   = "Flash AGGRO! on Bar (2.2s)",
@@ -698,9 +721,9 @@ local STRINGS = {
         CHECK_FADENONTAR     = "Focus on Target (Dim Others)",
         DESC_FADENONTAR      = "Keeps your target, mouseover, and DANGER mobs at 100% opacity while dimming other mobs to 55%.",
         CHECK_HIDEFAR        = "Hide Far Safe Mobs",
-        DESC_HIDEFAR         = "Hides the bar on enemies that are very far away (>20m safety margin), showing it only as you approach.",
+        DESC_HIDEFAR         = "Hides the bar on enemies that are very far away (>20 yd safety margin), showing it only as you approach.",
         CHECK_SOUND          = "Enable Warning Sounds",
-        DESC_SOUND           = "Plays audio cues when approaching aggro range (5m) or when stealth detection triggers.",
+        DESC_SOUND           = "Plays audio cues when approaching aggro range or when stealth detection triggers.",
         CHECK_MINIMAPBTN     = "Show Minimap Button",
         DESC_MINIMAPBTN      = "Displays the AggroMeter button around the edge of your Minimap.",
         CHECK_FLOATBTN       = "Show Floating Screen Button",
@@ -712,11 +735,15 @@ local STRINGS = {
         TIP_LCLICK_CONFIG    = "Left-Click: Open Settings",
         TIP_RCLICK_TOGGLE    = "Right-Click: Enable / Disable Addon",
         TIP_DRAG             = "Drag: Move button",
-        -- Distance unit labels
+        -- Distance unit labels & alerts
         UNIT_M               = "M",
         UNIT_YD              = "yd",
         LABEL_RANGE          = "Range",
         TEXT_ZERO_RANGE      = "DANGER",
+        ALERT_PREFIX         = "AGGRO ALERT",
+        ALERT_AT_RANGE       = "AGGRO ALERT - AT ESTIMATED RANGE",
+        OPT_PANEL_DESC       = "Nameplate proximity & pull-radius bar with real-time styling, alerts, and combat filters.",
+        OPT_OPEN_BTN         = "Open AggroMeter Settings",
         -- Login message
         LOGIN                = "v%s loaded (by Mynou). Enemy nameplates must be enabled. /am config",
     },
@@ -727,7 +754,9 @@ local STRINGS = {
         TAB_ALERTS           = "Alertas e Texto",
         TAB_VISIBILITY       = "Visibilidade",
         -- Section Headers
-        SEC_DIMENSIONS       = "Dimens\195\181es e Velocidade",
+        SEC_PREVIEW          = "Pr\195\169-visualiza\195\167\195\163o ao Vivo",
+        PREVIEW_HINT         = "Clique na barra para alternar: SAFE / CAUTION / PERIGO / AGGRO!",
+        SEC_DIMENSIONS       = "Dimens\195\181es, Posi\195\167\195\163o e Velocidade",
         SEC_STYLE            = "Textura e Tipografia",
         SEC_BARTEXT          = "Geral e Texto da Barra",
         SEC_SCREENALERTS     = "Avisos na Tela e Som",
@@ -745,8 +774,13 @@ local STRINGS = {
         DESC_HEIGHT          = "Ajusta a espessura vertical da barra de aggro.",
         SLIDER_SCALE         = "Escala Geral",
         DESC_SCALE           = "Multiplica o tamanho total da barra e de seus elementos.",
+        SLIDER_ALPHA         = "Opacidade da Barra",
+        DESC_ALPHA           = "Ajusta a transpar\195\170ncia padr\195\163o das barras exibidas nos nameplates.",
         SLIDER_UPDATERATE    = "Taxa de Leitura",
         DESC_UPDATERATE      = "Quantas vezes por segundo a dist\195\162ncia \195\169 verificada. Valores maiores reagem mais r\195\161pido.",
+        BTN_POS_BELOW        = "Posi\195\167\195\163o: Abaixo da Barra",
+        BTN_POS_ABOVE        = "Posi\195\167\195\163o: Acima da Barra",
+        DESC_BTN_POS         = "Ancora a barra do AggroMeter abaixo ou acima da barra de vida do inimigo.",
         -- Font & Texture section
         FONT_LABEL           = "Fonte da Barra:",
         FONT_SELECT_BTN      = "Fonte: %s",
@@ -782,12 +816,20 @@ local STRINGS = {
         DESC_SHOWTEXT        = "Exibe a margem restante at\195\169 puxar aggro e a dist\195\162ncia estimada (Dist.) na barra.",
         CHECK_STATUSTEXT     = "Exibir Prefixo (SAFE / CAUTION)",
         DESC_STATUSTEXT      = "Adiciona a palavra SAFE ou CAUTION antes dos n\195\186meros de dist\195\162ncia na barra.",
-        CHECK_WARNING        = "Aviso de Aproxima\195\167\195\163o (5m do Alvo)",
-        DESC_WARNING         = "Exibe um alerta central e som quando voc\195\170 chega a 5m ou menos de puxar o seu alvo atual.",
+        CHECK_COMPACTTEXT    = "Texto Compacto (S\195\179 Margem)",
+        DESC_COMPACTTEXT     = "Mostra apenas a margem restante na barra, ocultando o raio total de aggro.",
+        CHECK_WARNING        = "Aviso de Aproxima\195\167\195\163o (Alvo)",
+        DESC_WARNING         = "Exibe um alerta central e som quando voc\195\170 chega perto (5 yd/m) de puxar o seu alvo atual.",
         CHECK_PULLALERT      = "Alerta de Aggro na Tela",
         DESC_PULLALERT       = "Exibe 'AGGRO! - Nome do Mob' no centro da tela no instante em que um inimigo vira em voc\195\170.",
         CHECK_STEALTH        = "Alerta de Detec\195\167\195\163o em Stealth (!)",
         DESC_STEALTH         = "Para Ladinos/Druidas furtivos: exibe um '!' vermelho ao entrar na zona de detec\195\167\195\163o do inimigo.",
+        CHECK_NATIVESOUNDS   = "Usar Apenas Sons Nativos do WoW",
+        DESC_NATIVESOUNDS   = "Usa os efeitos sonoros nativos do cliente do WoW em vez dos arquivos de \195\161udio embutidos.",
+        BTN_TEST_ALERT       = "Testar Alerta e Som",
+        DESC_TEST_ALERT      = "Exibe uma pr\195\169via do alerta de aproxima\195\167\195\163o no centro da tela e toca o som de perigo.",
+        BTN_TEST_STEALTH     = "Testar Alerta Stealth (!)",
+        DESC_TEST_STEALTH    = "Exibe uma pr\195\169via do '!' vermelho de stealth e toca o som de aviso.",
         CHECK_INVERTBAR      = "Encher Barra ao Aproximar",
         DESC_INVERTBAR       = "Inverte o preenchimento: a barra fica vazia quando seguro e enche em vermelho conforme o perigo aumenta.",
         CHECK_AGGROGRAPHIC   = "Piscar AGGRO! na Barra (2.2s)",
@@ -805,11 +847,11 @@ local STRINGS = {
         CHECK_FADENONTAR     = "Destacar Apenas o Alvo (55%)",
         DESC_FADENONTAR      = "Mant\195\169m seu alvo, mouseover e mobs em PERIGO em 100% de opacidade, reduzindo os demais para 55%.",
         CHECK_HIDEFAR        = "Ocultar Mobs Muito Distantes",
-        DESC_HIDEFAR         = "Esconde a barra de inimigos que est\195\163o longe e seguros (>20m de margem), mostrando s\195\179 ao se aproximar.",
+        DESC_HIDEFAR         = "Esconde a barra de inimigos que est\195\163o longe e seguros (>20 yd de margem), mostrando s\195\179 ao se aproximar.",
         CHECK_SOUND          = "Ativar Sons de Alerta",
-        DESC_SOUND           = "Toca efeitos sonoros ao entrar na zona de aviso (5m) ou no alerta de detec\195\167\195\163o em stealth.",
+        DESC_SOUND           = "Toca efeitos sonoros ao entrar na zona de aviso ou no alerta de detec\195\167\195\163o em stealth.",
         CHECK_MINIMAPBTN     = "Mostrar Bot\195\163o no Minimapa",
-        DESC_MINIMAPBTN      = "Exibe o \195\173cone padr\195\163o do addon acoplado \195\160 borda do seu Minimapa.",
+        DESC_MINIMAPBTN      = "Exibe o \195\173cone do AggroMeter acoplado \195\160 borda do seu Minimapa.",
         CHECK_FLOATBTN       = "Mostrar Bot\195\163o Flutuante",
         DESC_FLOATBTN        = "Exibe o pequeno bot\195\163o discreto de acesso r\195\161pido na tela.",
         TIP_TITLE            = "AggroMeter",
@@ -822,6 +864,10 @@ local STRINGS = {
         UNIT_YD              = "jd",
         LABEL_RANGE          = "Dist.",
         TEXT_ZERO_RANGE      = "PERIGO",
+        ALERT_PREFIX         = "ALERTA DE AGGRO",
+        ALERT_AT_RANGE       = "ALERTA DE AGGRO - NO LIMITE DE PULL",
+        OPT_PANEL_DESC       = "Barra de proximidade e margem de pull nos nameplates com interface visual, alertas e filtros de combate.",
+        OPT_OPEN_BTN         = "Abrir Configura\195\167\195\181es do AggroMeter",
         LOGIN                = "v%s carregado (por Mynou). Nameplates inimigas devem estar ativas. /am config",
     },
 }
@@ -998,10 +1044,16 @@ local function CreateMinimapButton()
     bg:SetVertexColor(0.08, 0.08, 0.10, 0.90)
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
+    icon:SetSize(20, 20)
     icon:SetPoint("CENTER", btn, "CENTER", 0, 1)
     icon:SetTexture(ADDON_ICON)
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    if btn.CreateMaskTexture and icon.AddMaskTexture then
+        local mask = btn:CreateMaskTexture()
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(icon)
+        icon:AddMaskTexture(mask)
+    end
     btn.icon = icon
 
     local border = btn:CreateTexture(nil, "OVERLAY")
@@ -1336,8 +1388,36 @@ local function CreatePlateRow(plate)
 
     ApplyRowFont(row)
     row.text:SetText("")
+    row.lastSnapshot = { valid = false }
 
     return row
+end
+
+local function ResetSnapshot(row)
+    local snap = row.lastSnapshot
+    if snap then
+        snap.valid = false
+    end
+end
+
+local function SetSnapshot(row, radius, radiusUncertain, npcID, stealthModelActive, haveDistance, low, high, value, lowMargin, highMargin, state)
+    local snap = row.lastSnapshot
+    if not snap then
+        snap = {}
+        row.lastSnapshot = snap
+    end
+    snap.valid = true
+    snap.radius = radius
+    snap.radiusUncertain = radiusUncertain
+    snap.npcID = npcID
+    snap.stealthModelActive = stealthModelActive
+    snap.haveDistance = haveDistance
+    snap.low = low
+    snap.high = high
+    snap.value = value
+    snap.lowMargin = lowMargin
+    snap.highMargin = highMargin
+    snap.state = state
 end
 
 local function FormatRadius(radius)
@@ -1502,7 +1582,7 @@ local function UpdateRow(row, unit, delta)
     end
 
     if not db.enabled or not UnitIsHostileMob(unit) then
-        row.lastSnapshot = nil
+        ResetSnapshot(row)
         row.currentBarValue = nil
         row.targetBarValue = nil
         row.currentR = nil
@@ -1516,7 +1596,7 @@ local function UpdateRow(row, unit, delta)
     local showPullGraphic = keepGroupAggro or ((db.aggroGraphic ~= false) and row.pullFlashUntil and (now < row.pullFlashUntil))
 
     if (threatKnown and threatActive) or keepGroupAggro then
-        row.lastSnapshot = nil
+        ResetSnapshot(row)
         if showPullGraphic then
             row:SetScale(db.scale or 1.0)
             row:SetAlpha(1.0)
@@ -1552,7 +1632,7 @@ local function UpdateRow(row, unit, delta)
     end
 
     if db.hideInCombatGroup ~= false and UnitInGroupCombat(unit) then
-        row.lastSnapshot = nil
+        ResetSnapshot(row)
         row.currentBarValue = nil
         row.targetBarValue = nil
         row.currentR = nil
@@ -1563,7 +1643,7 @@ local function UpdateRow(row, unit, delta)
     end
 
     if db.hideInCombatOther ~= false and UnitInOtherCombat(unit) then
-        row.lastSnapshot = nil
+        ResetSnapshot(row)
         row.currentBarValue = nil
         row.targetBarValue = nil
         row.currentR = nil
@@ -1578,19 +1658,14 @@ local function UpdateRow(row, unit, delta)
 
     row:SetScale(db.scale or 1.0)
 
+    local baseAlpha = Clamp((db and db.barAlpha) or 1.0, 0.25, 1.0)
     local radius, radiusUncertain, npcID = ComputePullRadius(unit)
     local low, high, haveDistance = MeasureRangeBracket(unit)
 
     row.bar:SetMinMaxValues(0, db.maxMargin)
 
     if not haveDistance then
-        row.lastSnapshot = {
-            radius = radius,
-            radiusUncertain = radiusUncertain,
-            npcID = npcID,
-            stealthModelActive = PlayerUsesStealthAggroModel(),
-            haveDistance = false,
-        }
+        SetSnapshot(row, radius, radiusUncertain, npcID, PlayerUsesStealthAggroModel(), false, nil, nil, nil, nil, nil, nil)
         if db.hideFarMobs then
             row.currentBarValue = nil
             row.targetBarValue = nil
@@ -1607,28 +1682,17 @@ local function UpdateRow(row, unit, delta)
         row.text:SetText(db.showText and FormatRadius(radius) or "")
         SetRowTextColor(row, "unknown")
         if db.fadeNonTarget and not AsBool(UnitIsUnit(unit, "target"), false) and not AsBool(UnitIsUnit(unit, "mouseover"), false) then
-            row:SetAlpha(0.55)
+            row:SetAlpha(baseAlpha * 0.55)
         else
-            row:SetAlpha(1.0)
+            row:SetAlpha(baseAlpha)
         end
         row:Show()
         return
     end
 
     local value, lowMargin, highMargin, marginText = FormatMargin(low, high, radius)
-    row.lastSnapshot = {
-        radius = radius,
-        radiusUncertain = radiusUncertain,
-        npcID = npcID,
-        stealthModelActive = PlayerUsesStealthAggroModel(),
-        low = low,
-        high = high,
-        haveDistance = true,
-        value = value,
-        lowMargin = lowMargin,
-        highMargin = highMargin,
-        state = MarginState(value, lowMargin, highMargin),
-    }
+    local state = MarginState(value, lowMargin, highMargin)
+    SetSnapshot(row, radius, radiusUncertain, npcID, PlayerUsesStealthAggroModel(), true, low, high, value, lowMargin, highMargin, state)
 
     if db.hideFarMobs and type(lowMargin) == "number" and lowMargin >= db.maxMargin then
         row.currentBarValue = nil
@@ -1655,15 +1719,14 @@ local function UpdateRow(row, unit, delta)
         row.bar:SetStatusBarColor(r, g, b)
     end
 
-    local state = row.lastSnapshot.state
     SetRowTextColor(row, state:lower())
 
     if db.fadeNonTarget and state ~= "DANGER"
         and not AsBool(UnitIsUnit(unit, "target"), false)
         and not AsBool(UnitIsUnit(unit, "mouseover"), false) then
-        row:SetAlpha(0.55)
+        row:SetAlpha(baseAlpha * 0.55)
     else
-        row:SetAlpha(1.0)
+        row:SetAlpha(baseAlpha)
     end
 
     local atZeroRange = (highMargin and highMargin <= 0) or (value <= 0)
@@ -1674,7 +1737,11 @@ local function UpdateRow(row, unit, delta)
         else
             local prefix = radiusUncertain and "~" or ""
             local statePrefix = db.statusText and (state .. "  ") or ""
-            row.text:SetText(statePrefix .. prefix .. marginText .. "  " .. FormatRadius(radius))
+            if db.compactText then
+                row.text:SetText(statePrefix .. prefix .. marginText)
+            else
+                row.text:SetText(statePrefix .. prefix .. marginText .. "  " .. FormatRadius(radius))
+            end
         end
     else
         row.text:SetText("")
@@ -1709,15 +1776,32 @@ ResetProximityAlertState = function()
     lastSoundKey = nil
 end
 
-local function PlayAggroSound(tier, key)
-    if not db or not db.alertsEnabled or not db.soundEnabled or type(PlaySoundFile) ~= "function" then
+local function PlayAggroSound(tier, key, force)
+    if not db then return end
+    if not force then
+        if not db.alertsEnabled or not db.soundEnabled then
+            return
+        end
+        if key and key == lastSoundKey then
+            return
+        end
+        lastSoundKey = key
+    end
+
+    if db.useNativeSounds and type(PlaySound) == "function" then
+        local soundID = NATIVE_SOUND_SOFT
+        if tier == "danger" then
+            soundID = NATIVE_SOUND_DANGER
+        elseif tier == "mid" then
+            soundID = NATIVE_SOUND_MID
+        end
+        pcall(PlaySound, soundID, "Master")
         return
     end
 
-    if key and key == lastSoundKey then
+    if type(PlaySoundFile) ~= "function" then
         return
     end
-    lastSoundKey = key
 
     local path = SOUND_SOFT
     if tier == "danger" then
@@ -1782,16 +1866,16 @@ ResetStealthNoticeState = function()
     end
 end
 
-local function ShowStealthNotice()
-    if SafeUnitIsDead("player") then return end
+local function ShowStealthNotice(force)
+    if not force and SafeUnitIsDead("player") then return end
     CreateStealthNoticeFrame()
     local now = GetTime and GetTime() or 0
     stealthNoticeFrame.hideAt = now + STEALTH_NOTICE_DISPLAY_TIME
     stealthNoticeFrame:SetAlpha(1)
     stealthNoticeFrame:Show()
 
-    if db and db.alertsEnabled and db.soundEnabled and type(PlaySoundFile) == "function" then
-        pcall(PlaySoundFile, SOUND_STEALTH_NOTICE, "Master")
+    if (force or (db and db.alertsEnabled and db.soundEnabled)) and type(PlaySound) == "function" then
+        pcall(PlaySound, NATIVE_SOUND_STEALTH, "Master")
     end
 end
 
@@ -1824,7 +1908,7 @@ local function UpdateStealthPreDetectionNotice()
                 local snap = row and row.lastSnapshot
                 local lowMargin = snap and snap.lowMargin
                 local highMargin = snap and snap.highMargin
-                local readable = snap and snap.haveDistance and type(lowMargin) == "number"
+                local readable = snap and snap.valid and snap.haveDistance and type(lowMargin) == "number"
 
                 if known and threatActive then
                     state.inside = false
@@ -1858,11 +1942,11 @@ local function UpdateStealthPreDetectionNotice()
     end
 end
 
-local function TriggerProximityBanner(message, soundTier, soundKey)
-    if not db or not db.alertsEnabled then return end
-
-    if SafeUnitIsDead("player") then
-        return
+local function TriggerProximityBanner(message, soundTier, soundKey, force)
+    if not db then return end
+    if not force then
+        if not db.alertsEnabled then return end
+        if SafeUnitIsDead("player") then return end
     end
 
     if RaidNotice_AddMessage and RaidWarningFrame and ChatTypeInfo and ChatTypeInfo["RAID_WARNING"] then
@@ -1872,7 +1956,7 @@ local function TriggerProximityBanner(message, soundTier, soundKey)
     end
 
     if soundTier then
-        PlayAggroSound(soundTier, soundKey or message)
+        PlayAggroSound(soundTier, soundKey or message, force)
     end
 end
 
@@ -1889,14 +1973,18 @@ local function GetTargetProximityAlert(unit)
     local highMargin = high - radius
 
     if highMargin <= 0 then
-        return "AGGRO ALERT - AT ESTIMATED RANGE", "danger", "range"
+        return (L.ALERT_AT_RANGE or "AGGRO ALERT - AT ESTIMATED RANGE"), "danger", "range"
     end
 
     if lowMargin > 5 then
         return nil
     end
 
-    local YD_TO_M = 0.9144
+    local useMeters = db and db.unitSystem == "meters"
+    local mult = useMeters and 0.9144 or 1.0
+    local unitLabel = useMeters and (L.UNIT_M or "M") or (L.UNIT_YD or "yd")
+    local prefix = L.ALERT_PREFIX or "AGGRO ALERT"
+
     local lo = math.max(0, lowMargin)
     local hi = math.max(0, highMargin)
     local ceilLo = math.ceil(lo)
@@ -1909,7 +1997,7 @@ local function GetTargetProximityAlert(unit)
     end
 
     if ceilLo == ceilHi and ceilHi >= 1 and ceilHi <= 5 then
-        return "AGGRO ALERT - " .. Round(ceilHi * YD_TO_M) .. " M", tier, tostring(ceilHi)
+        return prefix .. " - " .. Round(ceilHi * mult) .. " " .. unitLabel, tier, tostring(ceilHi)
     end
 
     local shownLo = math.max(0, math.floor(lo))
@@ -1921,7 +2009,12 @@ local function GetTargetProximityAlert(unit)
     else
         tier = "soft"
     end
-    return "AGGRO ALERT - " .. Round(shownLo * YD_TO_M) .. "-" .. Round(shownHi * YD_TO_M) .. " M", tier, shownLo .. "-" .. shownHi
+    local valLo = Round(shownLo * mult)
+    local valHi = Round(shownHi * mult)
+    if valLo == valHi then
+        return prefix .. " - " .. valLo .. " " .. unitLabel, tier, shownLo .. "-" .. shownHi
+    end
+    return prefix .. " - " .. valLo .. "-" .. valHi .. " " .. unitLabel, tier, shownLo .. "-" .. shownHi
 end
 
 local function UpdateTargetProximityAlert()
@@ -2054,11 +2147,29 @@ local function OnPlateAdded(unit)
     row:SetSize(db.width, db.height + 10)
     row:SetScale(db.scale or 1.0)
     row:ClearAllPoints()
-    row:SetPoint("TOP", PlateAnchor(plate), "BOTTOM", 0, db.offsetY)
+    if db.barPosition == "above" then
+        row:SetPoint("BOTTOM", PlateAnchor(plate), "TOP", 0, db.offsetY)
+    else
+        row:SetPoint("TOP", PlateAnchor(plate), "BOTTOM", 0, db.offsetY)
+    end
     ApplyRowFont(row)
     row.unit = unit
     activeRows[unit] = row
     UpdateRow(row, unit)
+end
+
+local function ScanVisibleNameplates()
+    if not (C_NamePlate and C_NamePlate.GetNamePlates) then return end
+    local ok, plates = pcall(C_NamePlate.GetNamePlates)
+    if not ok or type(plates) ~= "table" then return end
+    for _, plate in ipairs(plates) do
+        if plate and not plate:IsForbidden() then
+            local unit = plate.namePlateUnitToken
+            if type(unit) == "string" and UnitExists(unit) then
+                OnPlateAdded(unit)
+            end
+        end
+    end
 end
 
 local function OnPlateRemoved(unit)
@@ -2084,8 +2195,16 @@ RefreshAllPlates = function()
         activeRows[unit] = nil
     end
 
-    for unit in pairs(visiblePlateUnits) do
-        OnPlateAdded(unit)
+    if next(visiblePlateUnits) == nil then
+        ScanVisibleNameplates()
+    else
+        for unit in pairs(visiblePlateUnits) do
+            OnPlateAdded(unit)
+        end
+    end
+
+    if configFrame and configFrame:IsShown() and configFrame.UpdatePreview then
+        configFrame:UpdatePreview()
     end
 end
 
@@ -2097,7 +2216,7 @@ local function CreateConfigFrame()
     if configFrame then return configFrame end
 
     local f = CreateFrame("Frame", "AggroMeterConfigFrame", UIParent, "BasicFrameTemplateWithInset")
-    f:SetSize(430, 480)
+    f:SetSize(440, 592)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -2151,8 +2270,8 @@ local function CreateConfigFrame()
         pages[i] = page
 
         local btn = CreateFrame("Button", nil, f)
-        btn:SetSize(128, 26)
-        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + (i - 1) * 133, -32)
+        btn:SetSize(132, 26)
+        btn:SetPoint("TOPLEFT", f, "TOPLEFT", 18 + (i - 1) * 136, -32)
 
         btn.bg = btn:CreateTexture(nil, "BACKGROUND")
         btn.bg:SetAllPoints(btn)
@@ -2185,7 +2304,7 @@ local function CreateConfigFrame()
         card.bg:SetColorTexture(0.06, 0.07, 0.09, 0.72)
 
         local header = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        header:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -10)
+        header:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -8)
         header:SetTextColor(1.00, 0.82, 0.15)
         header.getHeaderFn = getHeaderFn
         header:SetText(getHeaderFn())
@@ -2193,15 +2312,17 @@ local function CreateConfigFrame()
 
         local line = card:CreateTexture(nil, "ARTWORK")
         line:SetHeight(1)
-        line:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -28)
-        line:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -28)
+        line:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -25)
+        line:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -25)
         line:SetColorTexture(0.35, 0.35, 0.42, 0.50)
 
         return card
     end
 
+    local UpdatePreview = function() end
+
     local sliders = {}
-    local function CreateSlider(parent, name, getLabelFn, getDescFn, minVal, maxVal, step, xOffset, yOffset, getter, setter, formatStr)
+    local function CreateSlider(parent, name, getLabelFn, getDescFn, minVal, maxVal, step, xOffset, yOffset, getter, setter, formatStr, lowLabel, highLabel)
         local slider = CreateFrame("Slider", "AggroMeterSlider_" .. name, parent, "OptionsSliderTemplate")
         slider:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
         slider:SetWidth(174)
@@ -2213,8 +2334,8 @@ local function CreateConfigFrame()
         local highText = _G[slider:GetName() .. "High"]
         local text     = _G[slider:GetName() .. "Text"]
 
-        if lowText  then lowText:SetText(tostring(minVal)) end
-        if highText then highText:SetText(tostring(maxVal)) end
+        if lowText  then lowText:SetText(lowLabel or tostring(minVal)) end
+        if highText then highText:SetText(highLabel or tostring(maxVal)) end
 
         local function UpdateLabel(val)
             if text then
@@ -2235,6 +2356,7 @@ local function CreateConfigFrame()
             end
             UpdateLabel(value)
             setter(value)
+            UpdatePreview()
             RefreshAllPlates()
         end)
 
@@ -2251,125 +2373,8 @@ local function CreateConfigFrame()
         return slider
     end
 
-    -- =========================================================================
-    -- TAB 1: APPEARANCE
-    -- =========================================================================
-    local cardDims = CreateSectionCard(pages[1], function() return L.SEC_DIMENSIONS end, -2, 168)
-
-    CreateSlider(cardDims, "OffsetY",
-        function() return L.SLIDER_OFFSETY end, function() return L.DESC_OFFSETY end,
-        -50, 50, 1, 14, -46,
-        function() return db.offsetY or -5 end, function(v) db.offsetY = v end, "%d"
-    )
-    CreateSlider(cardDims, "FontSize",
-        function() return L.SLIDER_FONTSIZE end, function() return L.DESC_FONTSIZE end,
-        6, 24, 1, 206, -46,
-        function() return db.fontSize or 10 end, function(v) db.fontSize = v end, "%d"
-    )
-    CreateSlider(cardDims, "Width",
-        function() return L.SLIDER_WIDTH end, function() return L.DESC_WIDTH end,
-        80, 220, 2, 14, -90,
-        function() return db.width or DEFAULT_WIDTH end, function(v) db.width = v end, "%d"
-    )
-    CreateSlider(cardDims, "Height",
-        function() return L.SLIDER_HEIGHT end, function() return L.DESC_HEIGHT end,
-        4, 20, 1, 206, -90,
-        function() return db.height or DEFAULT_HEIGHT end, function(v) db.height = v end, "%d"
-    )
-    CreateSlider(cardDims, "Scale",
-        function() return L.SLIDER_SCALE end, function() return L.DESC_SCALE end,
-        0.75, 1.50, 0.05, 14, -134,
-        function() return db.scale or 1.0 end, function(v) db.scale = v end, "%.2f"
-    )
-    CreateSlider(cardDims, "UpdateRate",
-        function() return L.SLIDER_UPDATERATE end, function() return L.DESC_UPDATERATE end,
-        5, 60, 1, 206, -134,
-        function() return db.updateRate or 25 end, function(v) db.updateRate = v end,
-        function(v) return string.format("%d Hz (%d ms)", v, Round(1000 / math.max(1, v))) end
-    )
-
-    local cardStyle = CreateSectionCard(pages[1], function() return L.SEC_STYLE end, -176, 158)
-
-    -- Font Section (Prev/Next + Dropdown Button + Popup List)
-    local function BuildFontList()
-        local fontDir = MEDIA_PATH .. "Media\\Fonts\\"
-        local list = {
-            { label = L.FONT_DEFAULT,              path = "Fonts\\FRIZQT__.TTF" },
-            { label = "Arial Narrow",              path = "Fonts\\ARIALN.TTF"   },
-            { label = "Roboto Condensed Bold",     path = fontDir .. "RobotoCondensed-Bold.ttf" },
-            { label = "Lato Regular",              path = fontDir .. "Lato-Regular.ttf" },
-            { label = "Poppins SemiBold",          path = fontDir .. "Poppins-SemiBold.ttf" },
-            { label = "Diablo Heavy",              path = fontDir .. "DiabloHeavy.ttf" },
-            { label = "Atkinson Hyperlegible",     path = fontDir .. "AtkinsonHyperlegibleNext-Regular.otf" },
-            { label = "Expressway",                path = fontDir .. "Expressway.ttf" },
-            { label = "PT Sans Narrow Bold",       path = fontDir .. "PTSansNarrow-Bold.ttf" },
-            { label = "FiraSans Bold",             path = fontDir .. "FiraSans-Bold.ttf" },
-            { label = "Oswald Regular",            path = fontDir .. "Oswald-Regular.ttf" },
-            { label = "Prototype",                 path = fontDir .. "Prototype.ttf" },
-            { label = "Accidental Presidency",     path = fontDir .. "AccidentalPresidency.ttf" },
-            { label = "Forced Square",             path = fontDir .. "ForcedSquare.ttf" },
-            { label = "Trajan Pro SemiBold",       path = fontDir .. "TrajanPro3SemiBold.ttf" },
-            { label = "Homespun (Pixel)",          path = fontDir .. "Homespun.ttf" },
-            { label = "TrashHand",                 path = fontDir .. "TrashHand.ttf" },
-            { label = "Morpheus",                  path = "Fonts\\MORPHEUS.TTF" },
-            { label = "Skurri",                    path = "Fonts\\SKURRI.TTF"   },
-            { label = "2002",                      path = "Fonts\\2002.TTF"     },
-            { label = "2002 Bold",                 path = "Fonts\\2002B.TTF"    },
-            { label = "Friends",                   path = "Fonts\\FRIENDS.TTF"  },
-            { label = "Nimrod MT",                 path = "Fonts\\NIM_____.ttf" },
-        }
-        local seen = {}
-        for _, item in ipairs(list) do
-            seen[item.path:lower()] = true
-        end
-        if type(LibStub) == "function" then
-            local ok, lsm = pcall(LibStub, "LibSharedMedia-3.0", true)
-            if ok and lsm and type(lsm.List) == "function" and type(lsm.Fetch) == "function" then
-                local names = lsm:List("font")
-                if type(names) == "table" then
-                    for _, name in ipairs(names) do
-                        if #list >= 30 then break end
-                        local path = lsm:Fetch("font", name)
-                        if type(path) == "string" and not seen[path:lower()] then
-                            seen[path:lower()] = true
-                            list[#list + 1] = { label = name, path = path }
-                        end
-                    end
-                end
-            end
-        end
-        return list
-    end
-
-    local function CurrentFontName()
-        local current = (db and db.fontPath) or STANDARD_TEXT_FONT
-        local list = BuildFontList()
-        for _, item in ipairs(list) do
-            if item.path:lower() == current:lower() then
-                return item.label
-            end
-        end
-        return current:match("([^\\/]+)%.[^%.]+$") or current
-    end
-
-    local fontPrevBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    fontPrevBtn:SetSize(26, 22)
-    fontPrevBtn:SetPoint("TOPLEFT", cardStyle, "TOPLEFT", 12, -36)
-    fontPrevBtn:SetText("<")
-
-    local fontSelectBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    fontSelectBtn:SetSize(308, 22)
-    fontSelectBtn:SetPoint("LEFT", fontPrevBtn, "RIGHT", 4, 0)
-    AttachTooltip(fontSelectBtn, function() return string.format(L.FONT_SELECT_BTN, CurrentFontName()) end, function() return L.DESC_FONT_SELECT end)
-
-    local fontNextBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    fontNextBtn:SetSize(26, 22)
-    fontNextBtn:SetPoint("LEFT", fontSelectBtn, "RIGHT", 4, 0)
-    fontNextBtn:SetText(">")
-
     local fontMenu = CreateFrame("Frame", "AggroMeterFontMenu", f)
     fontMenu:SetWidth(520)
-    fontMenu:SetPoint("TOP", fontSelectBtn, "BOTTOM", 0, -2)
     fontMenu:SetFrameStrata("TOOLTIP")
     fontMenu:SetFrameLevel(f:GetFrameLevel() + 30)
     fontMenu:EnableMouse(true)
@@ -2385,130 +2390,8 @@ local function CreateConfigFrame()
     fontMenu.bg:SetPoint("BOTTOMRIGHT", fontMenu, "BOTTOMRIGHT", -1, 1)
     fontMenu.bg:SetColorTexture(0.06, 0.06, 0.08, 0.98)
 
-    local fontMenuItems = {}
-
-    local function UpdateFontSelectBtn()
-        fontSelectBtn:SetText(string.format(L.FONT_SELECT_BTN, CurrentFontName()))
-        local fs = fontSelectBtn:GetFontString()
-        if fs then
-            local path = (db and db.fontPath) or STANDARD_TEXT_FONT
-            local flags = BuildFontFlags()
-            local ok = pcall(fs.SetFont, fs, path, 11, flags)
-            if not ok then
-                fs:SetFont(STANDARD_TEXT_FONT, 11, flags)
-            end
-            if db and db.fontShadow == false then
-                fs:SetShadowColor(0, 0, 0, 0)
-                fs:SetShadowOffset(0, 0)
-            else
-                fs:SetShadowColor(0, 0, 0, 1)
-                fs:SetShadowOffset(1, -1)
-            end
-        end
-    end
-
-    local function CycleFont(delta)
-        local list = BuildFontList()
-        if #list == 0 then return end
-        local current = ((db and db.fontPath) or STANDARD_TEXT_FONT):lower()
-        local idx = 1
-        for i, item in ipairs(list) do
-            if item.path:lower() == current then
-                idx = i
-                break
-            end
-        end
-        idx = ((idx - 1 + delta) % #list) + 1
-        db.fontPath = list[idx].path
-        UpdateFontSelectBtn()
-        if fontMenu:IsShown() then
-            fontMenu:Hide()
-        end
-        RefreshAllPlates()
-    end
-
-    fontPrevBtn:SetScript("OnClick", function() CycleFont(-1) end)
-    fontNextBtn:SetScript("OnClick", function() CycleFont(1) end)
-
-    -- Bar Texture Section
-    local function BuildTextureList()
-        local texDir    = MEDIA_PATH .. "Media\\Textures\\"
-        local stylesDir = MEDIA_PATH .. "Media\\Textures\\Styles\\"
-        local list = {
-            { label = L.TEX_DEFAULT,             path = "Interface\\TargetingFrame\\UI-StatusBar" },
-            { label = "Fade Bottom",             path = stylesDir .. "fade-bottom.png" },
-            { label = "Fade Top",                path = stylesDir .. "fade-top.png" },
-            { label = "Fade Left",               path = stylesDir .. "fade-left.png" },
-            { label = "Fade Right",              path = stylesDir .. "fade-right.png" },
-            { label = "Bevelled",                path = stylesDir .. "bevelled.png" },
-            { label = "Bevelled Edge",           path = stylesDir .. "bevelled-edge.png" },
-            { label = "Bevelled Edge (Inv)",     path = stylesDir .. "bevelled-edge-inverted.png" },
-            { label = "Bevelled Grey",           path = stylesDir .. "bevelled-grey.png" },
-            { label = "Blizzard Cast Bar",       path = stylesDir .. "blizzard-cast-bar.png" },
-            { label = "Blizzard Cast (Grey)",    path = stylesDir .. "blizzard-cast-bar-grey.png" },
-            { label = "Absorb Narrow",           path = stylesDir .. "blizzard-absorb-narrow.png" },
-            { label = "Absorb Narrow (Grey)",    path = stylesDir .. "blizzard-absorb-grey-narrow.png" },
-            { label = "Absorb Wide",             path = stylesDir .. "blizzard-absorb.png" },
-            { label = "Absorb Wide (Grey)",      path = stylesDir .. "blizzard-absorb-grey.png" },
-            { label = "Painted Edge",            path = stylesDir .. "gw2.png" },
-            { label = "Clear Glass",             path = stylesDir .. "glass.png" },
-            { label = "Glossy",                  path = stylesDir .. "glossy.png" },
-            { label = "Segmented Pips",          path = stylesDir .. "ow-pips.png" },
-            { label = "Segmented Pips (Narrow)", path = stylesDir .. "ow-pips-narrow.png" },
-            { label = "Modern Pips",             path = stylesDir .. "ow2-pips.png" },
-            { label = "Modern Pips (BG)",        path = stylesDir .. "ow2-pips-bg.png" },
-            { label = "Solid Black",             path = stylesDir .. "black.png" },
-            { label = "Solid Grey",              path = stylesDir .. "grey.png" },
-            { label = "Solid Grey (Light)",      path = stylesDir .. "light-grey.png" },
-            { label = "Solid Grey (Raid)",       path = stylesDir .. "grey-raid.png" },
-            { label = "Solid White",             path = stylesDir .. "white.png" },
-            { label = "Minimalist",              path = texDir .. "Minimalist.tga" },
-            { label = "Smooth",                  path = texDir .. "Smooth.tga" },
-            { label = "Flat",                    path = texDir .. "Flat.tga" },
-            { label = "Glaze",                   path = texDir .. "Glaze.blp" },
-            { label = "BantoBar",                path = texDir .. "BantoBar.tga" },
-            { label = "Frosted Glass",           path = texDir .. "Glass.tga" },
-            { label = "Vidro",                   path = texDir .. "Vidro.tga" },
-            { label = "Texture 2020",            path = texDir .. "Texture2020.tga" },
-            { label = "Split Bar",               path = texDir .. "SplitBar.tga" },
-            { label = "Hyanda",                  path = texDir .. "Hyanda.tga" },
-            { label = "Dark With Line",          path = texDir .. "DarkWithLine.tga" },
-            { label = "Raid Bar",                path = "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
-            { label = "Skills Bar",              path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
-            { label = "BarFill Smooth",          path = "Interface\\TargetingFrame\\BarFill2" },
-        }
-        return list
-    end
-
-    local function CurrentTextureName()
-        local current = (db and db.barTexture) or DEFAULT_BAR_TEXTURE
-        local list = BuildTextureList()
-        for _, item in ipairs(list) do
-            if item.path:lower() == current:lower() then
-                return item.label
-            end
-        end
-        return current:match("([^\\/]+)$") or current
-    end
-
-    local texPrevBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    texPrevBtn:SetSize(26, 22)
-    texPrevBtn:SetPoint("TOPLEFT", cardStyle, "TOPLEFT", 12, -62)
-    texPrevBtn:SetText("<")
-
-    local texSelectBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    texSelectBtn:SetSize(308, 22)
-    texSelectBtn:SetPoint("LEFT", texPrevBtn, "RIGHT", 4, 0)
-    AttachTooltip(texSelectBtn, function() return string.format(L.TEX_SELECT_BTN, CurrentTextureName()) end, function() return L.DESC_TEX_SELECT end)
-
-    local texNextBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
-    texNextBtn:SetSize(26, 22)
-    texNextBtn:SetPoint("LEFT", texSelectBtn, "RIGHT", 4, 0)
-    texNextBtn:SetText(">")
-
     local texMenu = CreateFrame("Frame", "AggroMeterTextureMenu", f)
     texMenu:SetWidth(520)
-    texMenu:SetPoint("TOP", texSelectBtn, "BOTTOM", 0, -2)
     texMenu:SetFrameStrata("TOOLTIP")
     texMenu:SetFrameLevel(f:GetFrameLevel() + 30)
     texMenu:EnableMouse(true)
@@ -2524,173 +2407,10 @@ local function CreateConfigFrame()
     texMenu.bg:SetPoint("BOTTOMRIGHT", texMenu, "BOTTOMRIGHT", -1, 1)
     texMenu.bg:SetColorTexture(0.06, 0.06, 0.08, 0.98)
 
-    local texMenuItems = {}
+    local UpdateFontSelectBtn = function() end
+    local UpdateTextureSelectBtn = function() end
+    local UpdatePosBtn = function() end
 
-    local function UpdateTextureSelectBtn()
-        texSelectBtn:SetText(string.format(L.TEX_SELECT_BTN, CurrentTextureName()))
-    end
-
-    local function CycleTexture(delta)
-        local list = BuildTextureList()
-        if #list == 0 then return end
-        local current = ((db and db.barTexture) or DEFAULT_BAR_TEXTURE):lower()
-        local idx = 1
-        for i, item in ipairs(list) do
-            if item.path:lower() == current then
-                idx = i
-                break
-            end
-        end
-        idx = ((idx - 1 + delta) % #list) + 1
-        db.barTexture = list[idx].path
-        UpdateTextureSelectBtn()
-        if texMenu:IsShown() then
-            texMenu:Hide()
-        end
-        RefreshAllPlates()
-    end
-
-    texPrevBtn:SetScript("OnClick", function() CycleTexture(-1) end)
-    texNextBtn:SetScript("OnClick", function() CycleTexture(1) end)
-
-    local function PopulateTextureMenu()
-        local list = BuildTextureList()
-        local itemHeight = 20
-        local cols = 3
-        local colWidth = 168
-        local rows = math.ceil(#list / cols)
-        texMenu:SetHeight(rows * itemHeight + 8)
-        for i, entry in ipairs(list) do
-            local item = texMenuItems[i]
-            if not item then
-                item = CreateFrame("Button", nil, texMenu)
-                item:SetSize(colWidth, itemHeight)
-
-                item.preview = item:CreateTexture(nil, "BACKGROUND")
-                item.preview:SetPoint("TOPLEFT", item, "TOPLEFT", 2, -2)
-                item.preview:SetPoint("BOTTOMRIGHT", item, "BOTTOMRIGHT", -2, 2)
-
-                item.hl = item:CreateTexture(nil, "BORDER")
-                item.hl:SetAllPoints(item)
-                item.hl:SetColorTexture(1.0, 1.0, 1.0, 0.22)
-                item.hl:Hide()
-
-                item.label = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                item.label:SetPoint("LEFT", item, "LEFT", 6, 0)
-                item.label:SetJustifyH("LEFT")
-
-                item:SetScript("OnEnter", function(self) self.hl:Show() end)
-                item:SetScript("OnLeave", function(self) self.hl:Hide() end)
-                texMenuItems[i] = item
-            end
-            local col = (i - 1) % cols
-            local rowIdx = math.floor((i - 1) / cols)
-            item:ClearAllPoints()
-            item:SetPoint("TOPLEFT", texMenu, "TOPLEFT", 4 + (col * (colWidth + 4)), -4 - (rowIdx * itemHeight))
-
-            local isSelected = ((db and db.barTexture) or DEFAULT_BAR_TEXTURE):lower() == entry.path:lower()
-            item.label:SetText((isSelected and "> " or "   ") .. entry.label)
-            pcall(item.preview.SetTexture, item.preview, entry.path)
-            if isSelected then
-                item.preview:SetVertexColor(0.20, 0.72, 0.30, 0.85)
-                item.label:SetTextColor(0.40, 0.95, 1.00)
-            else
-                item.preview:SetVertexColor(0.18, 0.45, 0.25, 0.55)
-                item.label:SetTextColor(1.00, 1.00, 1.00)
-            end
-            local chosenTex = entry.path
-            item:SetScript("OnClick", function()
-                db.barTexture = chosenTex
-                texMenu:Hide()
-                UpdateTextureSelectBtn()
-                RefreshAllPlates()
-            end)
-            item:Show()
-        end
-        for i = #list + 1, #texMenuItems do
-            texMenuItems[i]:Hide()
-        end
-    end
-
-    local function PopulateFontMenu()
-        local list = BuildFontList()
-        local itemHeight = 20
-        local cols = 3
-        local colWidth = 168
-        local rows = math.ceil(#list / cols)
-        fontMenu:SetHeight(rows * itemHeight + 8)
-        local flags = BuildFontFlags()
-        for i, entry in ipairs(list) do
-            local item = fontMenuItems[i]
-            if not item then
-                item = CreateFrame("Button", nil, fontMenu)
-                item:SetSize(colWidth, itemHeight)
-
-                item.hl = item:CreateTexture(nil, "BACKGROUND")
-                item.hl:SetAllPoints(item)
-                item.hl:SetColorTexture(0.25, 0.50, 0.80, 0.35)
-                item.hl:Hide()
-
-                item.label = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                item.label:SetPoint("LEFT", item, "LEFT", 6, 0)
-                item.label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
-                item.label:SetJustifyH("LEFT")
-
-                item:SetScript("OnEnter", function(self) self.hl:Show() end)
-                item:SetScript("OnLeave", function(self) self.hl:Hide() end)
-                fontMenuItems[i] = item
-            end
-            local col = (i - 1) % cols
-            local rowIdx = math.floor((i - 1) / cols)
-            item:ClearAllPoints()
-            item:SetPoint("TOPLEFT", fontMenu, "TOPLEFT", 4 + (col * (colWidth + 4)), -4 - (rowIdx * itemHeight))
-
-            local isSelected = ((db and db.fontPath) or STANDARD_TEXT_FONT):lower() == entry.path:lower()
-            item.label:SetText((isSelected and "> " or "   ") .. entry.label)
-            local ok1 = pcall(item.label.SetFont, item.label, entry.path, 12, flags)
-            if not ok1 then
-                item.label:SetFont(STANDARD_TEXT_FONT, 12, flags)
-            end
-            if isSelected then
-                item.label:SetTextColor(0.40, 0.90, 1.00)
-            else
-                item.label:SetTextColor(1.00, 1.00, 1.00)
-            end
-            local chosenPath = entry.path
-            item:SetScript("OnClick", function()
-                db.fontPath = chosenPath
-                fontMenu:Hide()
-                UpdateFontSelectBtn()
-                RefreshAllPlates()
-            end)
-            item:Show()
-        end
-        for i = #list + 1, #fontMenuItems do
-            fontMenuItems[i]:Hide()
-        end
-    end
-
-    fontSelectBtn:SetScript("OnClick", function()
-        texMenu:Hide()
-        if fontMenu:IsShown() then
-            fontMenu:Hide()
-        else
-            PopulateFontMenu()
-            fontMenu:Show()
-        end
-    end)
-
-    texSelectBtn:SetScript("OnClick", function()
-        fontMenu:Hide()
-        if texMenu:IsShown() then
-            texMenu:Hide()
-        else
-            PopulateTextureMenu()
-            texMenu:Show()
-        end
-    end)
-
-    -- Checkboxes helper with interactive row highlight and contextual tooltip
     local checkboxes = {}
     local function CreateCheck(parent, name, getLabelFn, getDescFn, xOffset, yOffset, getter, setter, rowWidth)
         local cb = CreateFrame("CheckButton", "AggroMeterCheck_" .. name, parent, "UICheckButtonTemplate")
@@ -2708,6 +2428,7 @@ local function CreateConfigFrame()
         cb:SetScript("OnClick", function(self)
             setter(self:GetChecked() and true or false)
             UpdateFontSelectBtn()
+            UpdatePreview()
             RefreshAllPlates()
         end)
 
@@ -2730,124 +2451,757 @@ local function CreateConfigFrame()
         return cb
     end
 
-    -- Font Style Checkboxes inside cardStyle
-    CreateCheck(cardStyle, "StyleOutline",
-        function() return L.STYLE_OUTLINE end, function() return L.DESC_STYLE_OUTLINE end,
-        10, -94, function() return db.fontOutline ~= false end, function(v) db.fontOutline = v end, 65
-    )
-    CreateCheck(cardStyle, "StyleBold",
-        function() return L.STYLE_BOLD end, function() return L.DESC_STYLE_BOLD end,
-        106, -94, function() return db.fontBold and true or false end, function(v) db.fontBold = v end, 65
-    )
-    CreateCheck(cardStyle, "StyleShadow",
-        function() return L.STYLE_SHADOW end, function() return L.DESC_STYLE_SHADOW end,
-        198, -94, function() return db.fontShadow ~= false end, function(v) db.fontShadow = v end, 65
-    )
-    CreateCheck(cardStyle, "StyleMono",
-        function() return L.STYLE_MONO end, function() return L.DESC_STYLE_MONO end,
-        290, -94, function() return db.fontMonochrome and true or false end, function(v) db.fontMonochrome = v end, 60
-    )
+    -- =========================================================================
+    -- TAB 1: APPEARANCE (Live Preview + Dimensions + Texture/Font)
+    -- =========================================================================
+    do
+        local cardPreview = CreateSectionCard(pages[1], function() return L.SEC_PREVIEW end, -2, 78)
 
-    -- Bar motion & fill direction inside cardStyle
-    CreateCheck(cardStyle, "SmoothBar",
-        function() return L.CHECK_SMOOTHBAR end, function() return L.DESC_SMOOTHBAR end,
-        10, -124, function() return db.smoothBar ~= false end, function(v) db.smoothBar = v end, 165
-    )
-    CreateCheck(cardStyle, "InvertBar",
-        function() return L.CHECK_INVERTBAR end, function() return L.DESC_INVERTBAR end,
-        198, -124, function() return db.invertBar and true or false end, function(v) db.invertBar = v end, 165
-    )
+        local previewHint = cardPreview:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        previewHint:SetPoint("TOPRIGHT", cardPreview, "TOPRIGHT", -12, -9)
+        previewHint:SetText(L.PREVIEW_HINT)
+
+        local previewBtn = CreateFrame("Button", nil, cardPreview)
+        previewBtn:SetPoint("TOPLEFT", cardPreview, "TOPLEFT", 10, -27)
+        previewBtn:SetPoint("BOTTOMRIGHT", cardPreview, "BOTTOMRIGHT", -10, 4)
+        if previewBtn.SetClipsChildren then
+            previewBtn:SetClipsChildren(true)
+        end
+
+        local previewPlate = CreateFrame("Frame", nil, previewBtn)
+        previewPlate:SetSize(116, 13)
+
+        previewPlate.border = previewPlate:CreateTexture(nil, "BACKGROUND")
+        previewPlate.border:SetAllPoints(previewPlate)
+        previewPlate.border:SetColorTexture(0, 0, 0, 0.95)
+
+        previewPlate.hp = previewPlate:CreateTexture(nil, "ARTWORK")
+        previewPlate.hp:SetPoint("TOPLEFT", previewPlate, "TOPLEFT", 1, -1)
+        previewPlate.hp:SetPoint("BOTTOMRIGHT", previewPlate, "BOTTOMRIGHT", -1, 1)
+        previewPlate.hp:SetTexture(DEFAULT_BAR_TEXTURE)
+        previewPlate.hp:SetVertexColor(0.76, 0.14, 0.12, 0.95)
+
+        previewPlate.name = previewPlate:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        previewPlate.name:SetPoint("CENTER", previewPlate, "CENTER", 0, 0)
+        previewPlate.name:SetText("Scarlet Guard")
+        previewPlate.name:SetTextColor(1.0, 0.92, 0.90)
+
+        local pRow = CreateFrame("Frame", nil, previewBtn)
+        pRow.bg = pRow:CreateTexture(nil, "BACKGROUND")
+        pRow.bg:SetPoint("TOPLEFT", pRow, "TOPLEFT", 0, -1)
+        pRow.bg:SetPoint("BOTTOMRIGHT", pRow, "BOTTOMRIGHT", 0, 1)
+        pRow.bg:SetColorTexture(0.03, 0.03, 0.03, 0.78)
+
+        pRow.bar = CreateFrame("StatusBar", nil, pRow)
+        pRow.bar:SetPoint("TOPLEFT", pRow, "TOPLEFT", 1, -2)
+        pRow.bar:SetPoint("BOTTOMRIGHT", pRow, "BOTTOMRIGHT", -1, 2)
+        pRow.bar:SetMinMaxValues(0, DEFAULT_MAX_MARGIN)
+
+        pRow.textOverlay = CreateFrame("Frame", nil, pRow)
+        pRow.textOverlay:SetAllPoints(pRow)
+        pRow.textOverlay:SetFrameLevel(pRow.bar:GetFrameLevel() + 5)
+
+        pRow.text = pRow.textOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        pRow.text:SetPoint("CENTER", pRow.textOverlay, "CENTER", 0, 0)
+        pRow.text:SetJustifyH("CENTER")
+
+        pRow.aggroCircleLeft = pRow.textOverlay:CreateTexture(nil, "OVERLAY")
+        pRow.aggroCircleLeft:SetTexture("Interface\\COMMON\\Indicator-Red")
+        pRow.aggroCircleLeft:SetSize(14, 14)
+        pRow.aggroCircleLeft:SetPoint("LEFT", pRow.bar, "LEFT", 3, 0)
+
+        pRow.aggroCircleRight = pRow.textOverlay:CreateTexture(nil, "OVERLAY")
+        pRow.aggroCircleRight:SetTexture("Interface\\COMMON\\Indicator-Red")
+        pRow.aggroCircleRight:SetSize(14, 14)
+        pRow.aggroCircleRight:SetPoint("RIGHT", pRow.bar, "RIGHT", -3, 0)
+
+        local previewState = 1 -- 1=SAFE, 2=CAUTION, 3=DANGER, 4=AGGRO!
+
+        UpdatePreview = function()
+            if not db then return end
+            previewHint:SetText(L.PREVIEW_HINT)
+
+            local w = Clamp(db.width or DEFAULT_WIDTH, 80, 220)
+            local h = Clamp(db.height or DEFAULT_HEIGHT, 4, 20)
+            local sc = Clamp(db.scale or 1.0, 0.75, 1.15)
+            local alpha = Clamp(db.barAlpha or 1.0, 0.25, 1.0)
+            local offset = Clamp(db.offsetY or -5, -10, 10)
+
+            previewPlate:ClearAllPoints()
+            pRow:ClearAllPoints()
+            if db.barPosition == "above" then
+                previewPlate:SetPoint("BOTTOM", previewBtn, "BOTTOM", 0, 3)
+                pRow:SetPoint("BOTTOM", previewPlate, "TOP", 0, math.max(1, offset))
+            else
+                previewPlate:SetPoint("TOP", previewBtn, "TOP", 0, -3)
+                pRow:SetPoint("TOP", previewPlate, "BOTTOM", 0, math.min(-1, offset))
+            end
+
+            pRow:SetSize(w, h + 10)
+            pRow:SetScale(sc)
+            ApplyRowFont(pRow)
+
+            local useMeters = db.unitSystem == "meters"
+            local unitStr = useMeters and (L.UNIT_M or "M") or (L.UNIT_YD or "yd")
+            local rangeVal = useMeters and 18 or 20
+            local rangeText = (L.LABEL_RANGE or "Range") .. " " .. rangeVal .. " " .. unitStr
+
+            if previewState == 4 then
+                pRow:SetAlpha(1.0)
+                pRow.bar:SetValue(DEFAULT_MAX_MARGIN)
+                pRow.bar:SetStatusBarColor(1.00, 0.08, 0.04)
+                pRow.bg:SetColorTexture(0.55, 0.02, 0.01, 0.96)
+                pRow.text:SetTextColor(1.00, 1.00, 1.00)
+                pRow.text:SetText("AGGRO!")
+                pRow.aggroCircleLeft:Show()
+                pRow.aggroCircleRight:Show()
+                return
+            end
+
+            pRow.aggroCircleLeft:Hide()
+            pRow.aggroCircleRight:Hide()
+            pRow:SetAlpha(alpha)
+            pRow.text:SetTextColor(1.00, 1.00, 1.00)
+
+            local rawMargin, lowM, highM, stateName
+            if previewState == 1 then
+                rawMargin, lowM, highM, stateName = 15, 14, 16, "SAFE"
+                pRow.bg:SetColorTexture(0.03, 0.03, 0.03, 0.78)
+            elseif previewState == 2 then
+                rawMargin, lowM, highM, stateName = 5, 4, 6, "CAUTION"
+                pRow.bg:SetColorTexture(0.03, 0.03, 0.03, 0.78)
+            else
+                rawMargin, lowM, highM, stateName = 0, -1, 0, "DANGER"
+                pRow.bg:SetColorTexture(0.42, 0.04, 0.02, 0.88)
+            end
+
+            local fillVal = db.invertBar and (DEFAULT_MAX_MARGIN - rawMargin) or rawMargin
+            pRow.bar:SetValue(Clamp(fillVal, 0, DEFAULT_MAX_MARGIN))
+            local r, g, b = MarginColor(rawMargin, lowM, highM)
+            pRow.bar:SetStatusBarColor(r, g, b)
+
+            if not db.showText then
+                pRow.text:SetText("")
+            elseif previewState == 3 then
+                pRow.text:SetText(L.TEXT_ZERO_RANGE or "DANGER")
+            else
+                local shownVal = useMeters and Round(rawMargin * 0.9144) or rawMargin
+                local statePrefix = db.statusText and (stateName .. "  ") or ""
+                if db.compactText then
+                    pRow.text:SetText(statePrefix .. shownVal .. " " .. unitStr)
+                else
+                    pRow.text:SetText(statePrefix .. shownVal .. " " .. unitStr .. "  " .. rangeText)
+                end
+            end
+        end
+
+        previewBtn:SetScript("OnClick", function()
+            previewState = (previewState % 4) + 1
+            UpdatePreview()
+        end)
+
+        local cardDims = CreateSectionCard(pages[1], function() return L.SEC_DIMENSIONS end, -84, 204)
+
+        CreateSlider(cardDims, "OffsetY",
+            function() return L.SLIDER_OFFSETY end, function() return L.DESC_OFFSETY end,
+            -50, 50, 1, 14, -44,
+            function() return db.offsetY or -5 end, function(v) db.offsetY = v end, "%d"
+        )
+        CreateSlider(cardDims, "FontSize",
+            function() return L.SLIDER_FONTSIZE end, function() return L.DESC_FONTSIZE end,
+            6, 24, 1, 212, -44,
+            function() return db.fontSize or 10 end, function(v) db.fontSize = v end, "%d"
+        )
+        CreateSlider(cardDims, "Width",
+            function() return L.SLIDER_WIDTH end, function() return L.DESC_WIDTH end,
+            80, 220, 2, 14, -88,
+            function() return db.width or DEFAULT_WIDTH end, function(v) db.width = v end, "%d"
+        )
+        CreateSlider(cardDims, "Height",
+            function() return L.SLIDER_HEIGHT end, function() return L.DESC_HEIGHT end,
+            4, 20, 1, 212, -88,
+            function() return db.height or DEFAULT_HEIGHT end, function(v) db.height = v end, "%d"
+        )
+        CreateSlider(cardDims, "Scale",
+            function() return L.SLIDER_SCALE end, function() return L.DESC_SCALE end,
+            0.75, 1.50, 0.05, 14, -132,
+            function() return db.scale or 1.0 end, function(v) db.scale = v end, "%.2f"
+        )
+        CreateSlider(cardDims, "BarAlpha",
+            function() return L.SLIDER_ALPHA end, function() return L.DESC_ALPHA end,
+            0.25, 1.00, 0.05, 212, -132,
+            function() return db.barAlpha or 1.0 end, function(v) db.barAlpha = v end,
+            function(v) return string.format("%d%%", Round(v * 100)) end, "25%", "100%"
+        )
+        CreateSlider(cardDims, "UpdateRate",
+            function() return L.SLIDER_UPDATERATE end, function() return L.DESC_UPDATERATE end,
+            5, 60, 1, 14, -176,
+            function() return db.updateRate or 25 end, function(v) db.updateRate = v end,
+            function(v) return string.format("%d Hz (%d ms)", v, Round(1000 / math.max(1, v))) end
+        )
+
+        local posBtn = CreateFrame("Button", nil, cardDims, "UIPanelButtonTemplate")
+        posBtn:SetSize(174, 24)
+        posBtn:SetPoint("TOPLEFT", cardDims, "TOPLEFT", 212, -171)
+        UpdatePosBtn = function()
+            if db and db.barPosition == "above" then
+                posBtn:SetText(L.BTN_POS_ABOVE)
+            else
+                posBtn:SetText(L.BTN_POS_BELOW)
+            end
+        end
+        posBtn:SetScript("OnClick", function()
+            db.barPosition = (db.barPosition == "above") and "below" or "above"
+            UpdatePosBtn()
+            UpdatePreview()
+            RefreshAllPlates()
+        end)
+        AttachTooltip(posBtn, function()
+            return (db and db.barPosition == "above") and L.BTN_POS_ABOVE or L.BTN_POS_BELOW
+        end, function() return L.DESC_BTN_POS end)
+
+        local cardStyle = CreateSectionCard(pages[1], function() return L.SEC_STYLE end, -294, 148)
+
+        local function BuildFontList()
+            local fontDir = MEDIA_PATH .. "Media\\Fonts\\"
+            local list = {
+                { label = L.FONT_DEFAULT,              path = "Fonts\\FRIZQT__.TTF" },
+                { label = "Arial Narrow",              path = "Fonts\\ARIALN.TTF"   },
+                { label = "Roboto Condensed Bold",     path = fontDir .. "RobotoCondensed-Bold.ttf" },
+                { label = "Lato Regular",              path = fontDir .. "Lato-Regular.ttf" },
+                { label = "Poppins SemiBold",          path = fontDir .. "Poppins-SemiBold.ttf" },
+                { label = "Diablo Heavy",              path = fontDir .. "DiabloHeavy.ttf" },
+                { label = "Atkinson Hyperlegible",     path = fontDir .. "AtkinsonHyperlegibleNext-Regular.otf" },
+                { label = "Expressway",                path = fontDir .. "Expressway.ttf" },
+                { label = "PT Sans Narrow Bold",       path = fontDir .. "PTSansNarrow-Bold.ttf" },
+                { label = "FiraSans Bold",             path = fontDir .. "FiraSans-Bold.ttf" },
+                { label = "Oswald Regular",            path = fontDir .. "Oswald-Regular.ttf" },
+                { label = "Prototype",                 path = fontDir .. "Prototype.ttf" },
+                { label = "Accidental Presidency",     path = fontDir .. "AccidentalPresidency.ttf" },
+                { label = "Forced Square",             path = fontDir .. "ForcedSquare.ttf" },
+                { label = "Trajan Pro SemiBold",       path = fontDir .. "TrajanPro3SemiBold.ttf" },
+                { label = "Homespun (Pixel)",          path = fontDir .. "Homespun.ttf" },
+                { label = "TrashHand",                 path = fontDir .. "TrashHand.ttf" },
+                { label = "Morpheus",                  path = "Fonts\\MORPHEUS.TTF" },
+                { label = "Skurri",                    path = "Fonts\\SKURRI.TTF"   },
+                { label = "2002",                      path = "Fonts\\2002.TTF"     },
+                { label = "2002 Bold",                 path = "Fonts\\2002B.TTF"    },
+                { label = "Friends",                   path = "Fonts\\FRIENDS.TTF"  },
+                { label = "Nimrod MT",                 path = "Fonts\\NIM_____.ttf" },
+            }
+            local seen = {}
+            for _, item in ipairs(list) do
+                seen[item.path:lower()] = true
+            end
+            if type(LibStub) == "function" then
+                local ok, lsm = pcall(LibStub, "LibSharedMedia-3.0", true)
+                if ok and lsm and type(lsm.List) == "function" and type(lsm.Fetch) == "function" then
+                    local names = lsm:List("font")
+                    if type(names) == "table" then
+                        for _, name in ipairs(names) do
+                            if #list >= 30 then break end
+                            local path = lsm:Fetch("font", name)
+                            if type(path) == "string" and not seen[path:lower()] then
+                                seen[path:lower()] = true
+                                list[#list + 1] = { label = name, path = path }
+                            end
+                        end
+                    end
+                end
+            end
+            return list
+        end
+
+        local function CurrentFontName()
+            local current = (db and db.fontPath) or STANDARD_TEXT_FONT
+            local list = BuildFontList()
+            for _, item in ipairs(list) do
+                if item.path:lower() == current:lower() then
+                    return item.label
+                end
+            end
+            return current:match("([^\\/]+)%.[^%.]+$") or current
+        end
+
+        local fontPrevBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        fontPrevBtn:SetSize(26, 22)
+        fontPrevBtn:SetPoint("TOPLEFT", cardStyle, "TOPLEFT", 12, -32)
+        fontPrevBtn:SetText("<")
+
+        local fontSelectBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        fontSelectBtn:SetSize(320, 22)
+        fontSelectBtn:SetPoint("LEFT", fontPrevBtn, "RIGHT", 4, 0)
+        AttachTooltip(fontSelectBtn, function() return string.format(L.FONT_SELECT_BTN, CurrentFontName()) end, function() return L.DESC_FONT_SELECT end)
+
+        local fontNextBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        fontNextBtn:SetSize(26, 22)
+        fontNextBtn:SetPoint("LEFT", fontSelectBtn, "RIGHT", 4, 0)
+        fontNextBtn:SetText(">")
+
+        fontMenu:SetPoint("TOP", fontSelectBtn, "BOTTOM", 0, -2)
+        local fontMenuItems = {}
+
+        UpdateFontSelectBtn = function()
+            fontSelectBtn:SetText(string.format(L.FONT_SELECT_BTN, CurrentFontName()))
+            local fs = fontSelectBtn:GetFontString()
+            if fs then
+                local path = (db and db.fontPath) or STANDARD_TEXT_FONT
+                local flags = BuildFontFlags()
+                local ok = pcall(fs.SetFont, fs, path, 11, flags)
+                if not ok then
+                    fs:SetFont(STANDARD_TEXT_FONT, 11, flags)
+                end
+                if db and db.fontShadow == false then
+                    fs:SetShadowColor(0, 0, 0, 0)
+                    fs:SetShadowOffset(0, 0)
+                else
+                    fs:SetShadowColor(0, 0, 0, 1)
+                    fs:SetShadowOffset(1, -1)
+                end
+            end
+        end
+
+        local function CycleFont(delta)
+            local list = BuildFontList()
+            if #list == 0 then return end
+            local current = ((db and db.fontPath) or STANDARD_TEXT_FONT):lower()
+            local idx = 1
+            for i, item in ipairs(list) do
+                if item.path:lower() == current then
+                    idx = i
+                    break
+                end
+            end
+            idx = ((idx - 1 + delta) % #list) + 1
+            db.fontPath = list[idx].path
+            UpdateFontSelectBtn()
+            UpdatePreview()
+            if fontMenu:IsShown() then fontMenu:Hide() end
+            RefreshAllPlates()
+        end
+
+        fontPrevBtn:SetScript("OnClick", function() CycleFont(-1) end)
+        fontNextBtn:SetScript("OnClick", function() CycleFont(1) end)
+
+        local function BuildTextureList()
+            local texDir    = MEDIA_PATH .. "Media\\Textures\\"
+            local stylesDir = MEDIA_PATH .. "Media\\Textures\\Styles\\"
+            local list = {
+                { label = L.TEX_DEFAULT,             path = "Interface\\TargetingFrame\\UI-StatusBar" },
+                { label = "Fade Bottom",             path = stylesDir .. "fade-bottom.png" },
+                { label = "Fade Top",                path = stylesDir .. "fade-top.png" },
+                { label = "Fade Left",               path = stylesDir .. "fade-left.png" },
+                { label = "Fade Right",              path = stylesDir .. "fade-right.png" },
+                { label = "Bevelled",                path = stylesDir .. "bevelled.png" },
+                { label = "Bevelled Edge",           path = stylesDir .. "bevelled-edge.png" },
+                { label = "Bevelled Edge (Inv)",     path = stylesDir .. "bevelled-edge-inverted.png" },
+                { label = "Bevelled Grey",           path = stylesDir .. "bevelled-grey.png" },
+                { label = "Blizzard Cast Bar",       path = stylesDir .. "blizzard-cast-bar.png" },
+                { label = "Blizzard Cast (Grey)",    path = stylesDir .. "blizzard-cast-bar-grey.png" },
+                { label = "Absorb Narrow",           path = stylesDir .. "blizzard-absorb-narrow.png" },
+                { label = "Absorb Narrow (Grey)",    path = stylesDir .. "blizzard-absorb-grey-narrow.png" },
+                { label = "Absorb Wide",             path = stylesDir .. "blizzard-absorb.png" },
+                { label = "Absorb Wide (Grey)",      path = stylesDir .. "blizzard-absorb-grey.png" },
+                { label = "Painted Edge",            path = stylesDir .. "gw2.png" },
+                { label = "Clear Glass",             path = stylesDir .. "glass.png" },
+                { label = "Glossy",                  path = stylesDir .. "glossy.png" },
+                { label = "Segmented Pips",          path = stylesDir .. "ow-pips.png" },
+                { label = "Segmented Pips (Narrow)", path = stylesDir .. "ow-pips-narrow.png" },
+                { label = "Modern Pips",             path = stylesDir .. "ow2-pips.png" },
+                { label = "Modern Pips (BG)",        path = stylesDir .. "ow2-pips-bg.png" },
+                { label = "Solid Black",             path = stylesDir .. "black.png" },
+                { label = "Solid Grey",              path = stylesDir .. "grey.png" },
+                { label = "Solid Grey (Light)",      path = stylesDir .. "light-grey.png" },
+                { label = "Solid Grey (Raid)",       path = stylesDir .. "grey-raid.png" },
+                { label = "Solid White",             path = stylesDir .. "white.png" },
+                { label = "Minimalist",              path = texDir .. "Minimalist.tga" },
+                { label = "Smooth",                  path = texDir .. "Smooth.tga" },
+                { label = "Flat",                    path = texDir .. "Flat.tga" },
+                { label = "Glaze",                   path = texDir .. "Glaze.blp" },
+                { label = "BantoBar",                path = texDir .. "BantoBar.tga" },
+                { label = "Frosted Glass",           path = texDir .. "Glass.tga" },
+                { label = "Vidro",                   path = texDir .. "Vidro.tga" },
+                { label = "Texture 2020",            path = texDir .. "Texture2020.tga" },
+                { label = "Split Bar",               path = texDir .. "SplitBar.tga" },
+                { label = "Hyanda",                  path = texDir .. "Hyanda.tga" },
+                { label = "Dark With Line",          path = texDir .. "DarkWithLine.tga" },
+                { label = "Raid Bar",                path = "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
+                { label = "Skills Bar",              path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
+                { label = "BarFill Smooth",          path = "Interface\\TargetingFrame\\BarFill2" },
+            }
+            local seen = {}
+            for _, item in ipairs(list) do
+                seen[item.path:lower()] = true
+            end
+            if type(LibStub) == "function" then
+                local ok, lsm = pcall(LibStub, "LibSharedMedia-3.0", true)
+                if ok and lsm and type(lsm.List) == "function" and type(lsm.Fetch) == "function" then
+                    local names = lsm:List("statusbar")
+                    if type(names) == "table" then
+                        for _, name in ipairs(names) do
+                            if #list >= 60 then break end
+                            local path = lsm:Fetch("statusbar", name)
+                            if type(path) == "string" and not seen[path:lower()] then
+                                seen[path:lower()] = true
+                                list[#list + 1] = { label = name, path = path }
+                            end
+                        end
+                    end
+                end
+            end
+            return list
+        end
+
+        local function CurrentTextureName()
+            local current = (db and db.barTexture) or DEFAULT_BAR_TEXTURE
+            local list = BuildTextureList()
+            for _, item in ipairs(list) do
+                if item.path:lower() == current:lower() then
+                    return item.label
+                end
+            end
+            return current:match("([^\\/]+)$") or current
+        end
+
+        local texPrevBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        texPrevBtn:SetSize(26, 22)
+        texPrevBtn:SetPoint("TOPLEFT", cardStyle, "TOPLEFT", 12, -58)
+        texPrevBtn:SetText("<")
+
+        local texSelectBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        texSelectBtn:SetSize(320, 22)
+        texSelectBtn:SetPoint("LEFT", texPrevBtn, "RIGHT", 4, 0)
+        AttachTooltip(texSelectBtn, function() return string.format(L.TEX_SELECT_BTN, CurrentTextureName()) end, function() return L.DESC_TEX_SELECT end)
+
+        local texNextBtn = CreateFrame("Button", nil, cardStyle, "UIPanelButtonTemplate")
+        texNextBtn:SetSize(26, 22)
+        texNextBtn:SetPoint("LEFT", texSelectBtn, "RIGHT", 4, 0)
+        texNextBtn:SetText(">")
+
+        texMenu:SetPoint("TOP", texSelectBtn, "BOTTOM", 0, -2)
+        local texMenuItems = {}
+
+        UpdateTextureSelectBtn = function()
+            texSelectBtn:SetText(string.format(L.TEX_SELECT_BTN, CurrentTextureName()))
+        end
+
+        local function CycleTexture(delta)
+            local list = BuildTextureList()
+            if #list == 0 then return end
+            local current = ((db and db.barTexture) or DEFAULT_BAR_TEXTURE):lower()
+            local idx = 1
+            for i, item in ipairs(list) do
+                if item.path:lower() == current then
+                    idx = i
+                    break
+                end
+            end
+            idx = ((idx - 1 + delta) % #list) + 1
+            db.barTexture = list[idx].path
+            UpdateTextureSelectBtn()
+            UpdatePreview()
+            if texMenu:IsShown() then texMenu:Hide() end
+            RefreshAllPlates()
+        end
+
+        texPrevBtn:SetScript("OnClick", function() CycleTexture(-1) end)
+        texNextBtn:SetScript("OnClick", function() CycleTexture(1) end)
+
+        local function PopulateTextureMenu()
+            local list = BuildTextureList()
+            local itemHeight = 20
+            local cols = 3
+            local colWidth = 168
+            local rows = math.ceil(#list / cols)
+            texMenu:SetHeight(rows * itemHeight + 8)
+            for i, entry in ipairs(list) do
+                local item = texMenuItems[i]
+                if not item then
+                    item = CreateFrame("Button", nil, texMenu)
+                    item:SetSize(colWidth, itemHeight)
+
+                    item.preview = item:CreateTexture(nil, "BACKGROUND")
+                    item.preview:SetPoint("TOPLEFT", item, "TOPLEFT", 2, -2)
+                    item.preview:SetPoint("BOTTOMRIGHT", item, "BOTTOMRIGHT", -2, 2)
+
+                    item.hl = item:CreateTexture(nil, "BORDER")
+                    item.hl:SetAllPoints(item)
+                    item.hl:SetColorTexture(1.0, 1.0, 1.0, 0.22)
+                    item.hl:Hide()
+
+                    item.label = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    item.label:SetPoint("LEFT", item, "LEFT", 6, 0)
+                    item.label:SetJustifyH("LEFT")
+
+                    item:SetScript("OnEnter", function(self) self.hl:Show() end)
+                    item:SetScript("OnLeave", function(self) self.hl:Hide() end)
+                    texMenuItems[i] = item
+                end
+                local col = (i - 1) % cols
+                local rowIdx = math.floor((i - 1) / cols)
+                item:ClearAllPoints()
+                item:SetPoint("TOPLEFT", texMenu, "TOPLEFT", 4 + (col * (colWidth + 4)), -4 - (rowIdx * itemHeight))
+
+                local isSelected = ((db and db.barTexture) or DEFAULT_BAR_TEXTURE):lower() == entry.path:lower()
+                item.label:SetText((isSelected and "> " or "   ") .. entry.label)
+                pcall(item.preview.SetTexture, item.preview, entry.path)
+                if isSelected then
+                    item.preview:SetVertexColor(0.20, 0.72, 0.30, 0.85)
+                    item.label:SetTextColor(0.40, 0.95, 1.00)
+                else
+                    item.preview:SetVertexColor(0.18, 0.45, 0.25, 0.55)
+                    item.label:SetTextColor(1.00, 1.00, 1.00)
+                end
+                local chosenTex = entry.path
+                item:SetScript("OnClick", function()
+                    db.barTexture = chosenTex
+                    texMenu:Hide()
+                    UpdateTextureSelectBtn()
+                    UpdatePreview()
+                    RefreshAllPlates()
+                end)
+                item:Show()
+            end
+            for i = #list + 1, #texMenuItems do
+                texMenuItems[i]:Hide()
+            end
+        end
+
+        local function PopulateFontMenu()
+            local list = BuildFontList()
+            local itemHeight = 20
+            local cols = 3
+            local colWidth = 168
+            local rows = math.ceil(#list / cols)
+            fontMenu:SetHeight(rows * itemHeight + 8)
+            local flags = BuildFontFlags()
+            for i, entry in ipairs(list) do
+                local item = fontMenuItems[i]
+                if not item then
+                    item = CreateFrame("Button", nil, fontMenu)
+                    item:SetSize(colWidth, itemHeight)
+
+                    item.hl = item:CreateTexture(nil, "BACKGROUND")
+                    item.hl:SetAllPoints(item)
+                    item.hl:SetColorTexture(0.25, 0.50, 0.80, 0.35)
+                    item.hl:Hide()
+
+                    item.label = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    item.label:SetPoint("LEFT", item, "LEFT", 6, 0)
+                    item.label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
+                    item.label:SetJustifyH("LEFT")
+
+                    item:SetScript("OnEnter", function(self) self.hl:Show() end)
+                    item:SetScript("OnLeave", function(self) self.hl:Hide() end)
+                    fontMenuItems[i] = item
+                end
+                local col = (i - 1) % cols
+                local rowIdx = math.floor((i - 1) / cols)
+                item:ClearAllPoints()
+                item:SetPoint("TOPLEFT", fontMenu, "TOPLEFT", 4 + (col * (colWidth + 4)), -4 - (rowIdx * itemHeight))
+
+                local isSelected = ((db and db.fontPath) or STANDARD_TEXT_FONT):lower() == entry.path:lower()
+                item.label:SetText((isSelected and "> " or "   ") .. entry.label)
+                local ok1 = pcall(item.label.SetFont, item.label, entry.path, 12, flags)
+                if not ok1 then
+                    item.label:SetFont(STANDARD_TEXT_FONT, 12, flags)
+                end
+                if isSelected then
+                    item.label:SetTextColor(0.40, 0.90, 1.00)
+                else
+                    item.label:SetTextColor(1.00, 1.00, 1.00)
+                end
+                local chosenPath = entry.path
+                item:SetScript("OnClick", function()
+                    db.fontPath = chosenPath
+                    fontMenu:Hide()
+                    UpdateFontSelectBtn()
+                    UpdatePreview()
+                    RefreshAllPlates()
+                end)
+                item:Show()
+            end
+            for i = #list + 1, #fontMenuItems do
+                fontMenuItems[i]:Hide()
+            end
+        end
+
+        fontSelectBtn:SetScript("OnClick", function()
+            texMenu:Hide()
+            if fontMenu:IsShown() then
+                fontMenu:Hide()
+            else
+                PopulateFontMenu()
+                fontMenu:Show()
+            end
+        end)
+
+        texSelectBtn:SetScript("OnClick", function()
+            fontMenu:Hide()
+            if texMenu:IsShown() then
+                texMenu:Hide()
+            else
+                PopulateTextureMenu()
+                texMenu:Show()
+            end
+        end)
+
+        CreateCheck(cardStyle, "StyleOutline",
+            function() return L.STYLE_OUTLINE end, function() return L.DESC_STYLE_OUTLINE end,
+            10, -88, function() return db.fontOutline ~= false end, function(v) db.fontOutline = v end, 65
+        )
+        CreateCheck(cardStyle, "StyleBold",
+            function() return L.STYLE_BOLD end, function() return L.DESC_STYLE_BOLD end,
+            108, -88, function() return db.fontBold and true or false end, function(v) db.fontBold = v end, 65
+        )
+        CreateCheck(cardStyle, "StyleShadow",
+            function() return L.STYLE_SHADOW end, function() return L.DESC_STYLE_SHADOW end,
+            204, -88, function() return db.fontShadow ~= false end, function(v) db.fontShadow = v end, 65
+        )
+        CreateCheck(cardStyle, "StyleMono",
+            function() return L.STYLE_MONO end, function() return L.DESC_STYLE_MONO end,
+            298, -88, function() return db.fontMonochrome and true or false end, function(v) db.fontMonochrome = v end, 60
+        )
+
+        CreateCheck(cardStyle, "SmoothBar",
+            function() return L.CHECK_SMOOTHBAR end, function() return L.DESC_SMOOTHBAR end,
+            10, -118, function() return db.smoothBar ~= false end, function(v) db.smoothBar = v end, 165
+        )
+        CreateCheck(cardStyle, "InvertBar",
+            function() return L.CHECK_INVERTBAR end, function() return L.DESC_INVERTBAR end,
+            204, -118, function() return db.invertBar and true or false end, function(v) db.invertBar = v end, 165
+        )
+    end
 
     -- =========================================================================
     -- TAB 2: ALERTS & TEXT
     -- =========================================================================
-    local cardBarText = CreateSectionCard(pages[2], function() return L.SEC_BARTEXT end, -2, 108)
+    local UpdateTestBtns = function() end
+    do
+        local cardBarText = CreateSectionCard(pages[2], function() return L.SEC_BARTEXT end, -2, 104)
 
-    CreateCheck(cardBarText, "Enabled",
-        function() return L.CHECK_ENABLED end, function() return L.DESC_ENABLED end,
-        12, -34, function() return db.enabled end,
-        function(v) db.enabled = v; ResetProximityAlertState(); ResetStealthNoticeState(); UpdateAlertControlButton() end, 165
-    )
-    CreateCheck(cardBarText, "ShowText",
-        function() return L.CHECK_SHOWTEXT end, function() return L.DESC_SHOWTEXT end,
-        198, -34, function() return db.showText end, function(v) db.showText = v end, 165
-    )
-    CreateCheck(cardBarText, "StatusText",
-        function() return L.CHECK_STATUSTEXT end, function() return L.DESC_STATUSTEXT end,
-        12, -64, function() return db.statusText end, function(v) db.statusText = v end, 320
-    )
+        CreateCheck(cardBarText, "Enabled",
+            function() return L.CHECK_ENABLED end, function() return L.DESC_ENABLED end,
+            12, -32, function() return db.enabled end,
+            function(v) db.enabled = v; ResetProximityAlertState(); ResetStealthNoticeState(); UpdateAlertControlButton() end, 165
+        )
+        CreateCheck(cardBarText, "ShowText",
+            function() return L.CHECK_SHOWTEXT end, function() return L.DESC_SHOWTEXT end,
+            212, -32, function() return db.showText end, function(v) db.showText = v end, 165
+        )
+        CreateCheck(cardBarText, "StatusText",
+            function() return L.CHECK_STATUSTEXT end, function() return L.DESC_STATUSTEXT end,
+            12, -64, function() return db.statusText end, function(v) db.statusText = v end, 175
+        )
+        CreateCheck(cardBarText, "CompactText",
+            function() return L.CHECK_COMPACTTEXT end, function() return L.DESC_COMPACTTEXT end,
+            212, -64, function() return db.compactText and true or false end, function(v) db.compactText = v end, 175
+        )
 
-    local cardScreenAlerts = CreateSectionCard(pages[2], function() return L.SEC_SCREENALERTS end, -116, 110)
+        local cardScreenAlerts = CreateSectionCard(pages[2], function() return L.SEC_SCREENALERTS end, -112, 174)
 
-    CreateCheck(cardScreenAlerts, "Warning",
-        function() return L.CHECK_WARNING end, function() return L.DESC_WARNING end,
-        12, -34, function() return db.warningEnabled end,
-        function(v) db.warningEnabled = v; ResetProximityAlertState() end, 165
-    )
-    CreateCheck(cardScreenAlerts, "SoundEnabled",
-        function() return L.CHECK_SOUND end, function() return L.DESC_SOUND end,
-        198, -34, function() return db.soundEnabled ~= false end,
-        function(v) db.soundEnabled = v; lastSoundKey = nil end, 165
-    )
-    CreateCheck(cardScreenAlerts, "PullAlert",
-        function() return L.CHECK_PULLALERT end, function() return L.DESC_PULLALERT end,
-        12, -66, function() return db.pullAlertEnabled end, function(v) db.pullAlertEnabled = v end, 165
-    )
-    CreateCheck(cardScreenAlerts, "StealthNotice",
-        function() return L.CHECK_STEALTH end, function() return L.DESC_STEALTH end,
-        198, -66, function() return db.stealthNoticeEnabled end,
-        function(v) db.stealthNoticeEnabled = v; ResetStealthNoticeState() end, 165
-    )
+        CreateCheck(cardScreenAlerts, "Warning",
+            function() return L.CHECK_WARNING end, function() return L.DESC_WARNING end,
+            12, -32, function() return db.warningEnabled end,
+            function(v) db.warningEnabled = v; ResetProximityAlertState() end, 175
+        )
+        CreateCheck(cardScreenAlerts, "SoundEnabled",
+            function() return L.CHECK_SOUND end, function() return L.DESC_SOUND end,
+            212, -32, function() return db.soundEnabled ~= false end,
+            function(v) db.soundEnabled = v; lastSoundKey = nil end, 165
+        )
+        CreateCheck(cardScreenAlerts, "PullAlert",
+            function() return L.CHECK_PULLALERT end, function() return L.DESC_PULLALERT end,
+            12, -64, function() return db.pullAlertEnabled end, function(v) db.pullAlertEnabled = v end, 175
+        )
+        CreateCheck(cardScreenAlerts, "StealthNotice",
+            function() return L.CHECK_STEALTH end, function() return L.DESC_STEALTH end,
+            212, -64, function() return db.stealthNoticeEnabled end,
+            function(v) db.stealthNoticeEnabled = v; ResetStealthNoticeState() end, 165
+        )
+        CreateCheck(cardScreenAlerts, "UseNativeSounds",
+            function() return L.CHECK_NATIVESOUNDS end, function() return L.DESC_NATIVESOUNDS end,
+            12, -96, function() return db.useNativeSounds and true or false end,
+            function(v) db.useNativeSounds = v; lastSoundKey = nil end, 320
+        )
 
-    local cardBarAggro = CreateSectionCard(pages[2], function() return L.SEC_BARAGGRO end, -232, 102)
+        local testAlertBtn = CreateFrame("Button", nil, cardScreenAlerts, "UIPanelButtonTemplate")
+        testAlertBtn:SetSize(184, 24)
+        testAlertBtn:SetPoint("TOPLEFT", cardScreenAlerts, "TOPLEFT", 12, -134)
+        testAlertBtn:SetScript("OnClick", function()
+            local useMeters = db and db.unitSystem == "meters"
+            local unitLabel = useMeters and (L.UNIT_M or "M") or (L.UNIT_YD or "yd")
+            local sampleVal = useMeters and "3" or "4"
+            local msg = (L.ALERT_PREFIX or "AGGRO ALERT") .. " - " .. sampleVal .. " " .. unitLabel
+            TriggerProximityBanner(msg, "danger", "test-preview", true)
+        end)
+        AttachTooltip(testAlertBtn, function() return L.BTN_TEST_ALERT end, function() return L.DESC_TEST_ALERT end)
 
-    CreateCheck(cardBarAggro, "AggroGraphic",
-        function() return L.CHECK_AGGROGRAPHIC end, function() return L.DESC_AGGROGRAPHIC end,
-        12, -34, function() return db.aggroGraphic ~= false end, function(v) db.aggroGraphic = v end, 320
-    )
-    CreateCheck(cardBarAggro, "KeepGroupAggro",
-        function() return L.CHECK_KEEPGROUPAGGRO end, function() return L.DESC_KEEPGROUPAGGRO end,
-        12, -64, function() return db.keepGroupAggro ~= false end, function(v) db.keepGroupAggro = v end, 320
-    )
+        local testStealthBtn = CreateFrame("Button", nil, cardScreenAlerts, "UIPanelButtonTemplate")
+        testStealthBtn:SetSize(184, 24)
+        testStealthBtn:SetPoint("TOPLEFT", cardScreenAlerts, "TOPLEFT", 210, -134)
+        testStealthBtn:SetScript("OnClick", function()
+            ShowStealthNotice(true)
+        end)
+        AttachTooltip(testStealthBtn, function() return L.BTN_TEST_STEALTH end, function() return L.DESC_TEST_STEALTH end)
+
+        UpdateTestBtns = function()
+            testAlertBtn:SetText(L.BTN_TEST_ALERT)
+            testStealthBtn:SetText(L.BTN_TEST_STEALTH)
+        end
+
+        local cardBarAggro = CreateSectionCard(pages[2], function() return L.SEC_BARAGGRO end, -292, 102)
+
+        CreateCheck(cardBarAggro, "AggroGraphic",
+            function() return L.CHECK_AGGROGRAPHIC end, function() return L.DESC_AGGROGRAPHIC end,
+            12, -32, function() return db.aggroGraphic ~= false end, function(v) db.aggroGraphic = v end, 320
+        )
+        CreateCheck(cardBarAggro, "KeepGroupAggro",
+            function() return L.CHECK_KEEPGROUPAGGRO end, function() return L.DESC_KEEPGROUPAGGRO end,
+            12, -64, function() return db.keepGroupAggro ~= false end, function(v) db.keepGroupAggro = v end, 320
+        )
+    end
 
     -- =========================================================================
     -- TAB 3: VISIBILITY
     -- =========================================================================
-    local cardCombatHide = CreateSectionCard(pages[3], function() return L.SEC_COMBATHIDE end, -2, 134)
+    do
+        local cardCombatHide = CreateSectionCard(pages[3], function() return L.SEC_COMBATHIDE end, -2, 134)
 
-    CreateCheck(cardCombatHide, "HideSelf",
-        function() return L.CHECK_HIDESELF end, function() return L.DESC_HIDESELF end,
-        12, -34, function() return db.hideInCombatSelf ~= false end, function(v) db.hideInCombatSelf = v end, 320
-    )
-    CreateCheck(cardCombatHide, "HideGroup",
-        function() return L.CHECK_HIDEGROUP end, function() return L.DESC_HIDEGROUP end,
-        12, -64, function() return db.hideInCombatGroup ~= false end, function(v) db.hideInCombatGroup = v end, 320
-    )
-    CreateCheck(cardCombatHide, "HideOther",
-        function() return L.CHECK_HIDEOTHER end, function() return L.DESC_HIDEOTHER end,
-        12, -94, function() return db.hideInCombatOther ~= false end, function(v) db.hideInCombatOther = v end, 320
-    )
+        CreateCheck(cardCombatHide, "HideSelf",
+            function() return L.CHECK_HIDESELF end, function() return L.DESC_HIDESELF end,
+            12, -34, function() return db.hideInCombatSelf ~= false end, function(v) db.hideInCombatSelf = v end, 320
+        )
+        CreateCheck(cardCombatHide, "HideGroup",
+            function() return L.CHECK_HIDEGROUP end, function() return L.DESC_HIDEGROUP end,
+            12, -64, function() return db.hideInCombatGroup ~= false end, function(v) db.hideInCombatGroup = v end, 320
+        )
+        CreateCheck(cardCombatHide, "HideOther",
+            function() return L.CHECK_HIDEOTHER end, function() return L.DESC_HIDEOTHER end,
+            12, -94, function() return db.hideInCombatOther ~= false end, function(v) db.hideInCombatOther = v end, 320
+        )
 
-    local cardDeclutter = CreateSectionCard(pages[3], function() return L.SEC_DECLUTTER end, -142, 164)
+        local cardDeclutter = CreateSectionCard(pages[3], function() return L.SEC_DECLUTTER end, -142, 164)
 
-    CreateCheck(cardDeclutter, "FadeNonTarget",
-        function() return L.CHECK_FADENONTAR end, function() return L.DESC_FADENONTAR end,
-        12, -34, function() return db.fadeNonTarget and true or false end, function(v) db.fadeNonTarget = v end, 320
-    )
-    CreateCheck(cardDeclutter, "HideFarMobs",
-        function() return L.CHECK_HIDEFAR end, function() return L.DESC_HIDEFAR end,
-        12, -64, function() return db.hideFarMobs and true or false end, function(v) db.hideFarMobs = v end, 320
-    )
-    CreateCheck(cardDeclutter, "ShowMinimapBtn",
-        function() return L.CHECK_MINIMAPBTN end, function() return L.DESC_MINIMAPBTN end,
-        12, -94, function() return db.showMinimapButton ~= false end,
-        function(v) db.showMinimapButton = v; UpdateAlertControlButton() end, 320
-    )
-    CreateCheck(cardDeclutter, "ShowFloatBtn",
-        function() return L.CHECK_FLOATBTN end, function() return L.DESC_FLOATBTN end,
-        12, -124, function() return db.showFloatingButton ~= false end,
-        function(v) db.showFloatingButton = v; UpdateAlertControlButton() end, 320
-    )
+        CreateCheck(cardDeclutter, "FadeNonTarget",
+            function() return L.CHECK_FADENONTAR end, function() return L.DESC_FADENONTAR end,
+            12, -34, function() return db.fadeNonTarget and true or false end, function(v) db.fadeNonTarget = v end, 320
+        )
+        CreateCheck(cardDeclutter, "HideFarMobs",
+            function() return L.CHECK_HIDEFAR end, function() return L.DESC_HIDEFAR end,
+            12, -64, function() return db.hideFarMobs and true or false end, function(v) db.hideFarMobs = v end, 320
+        )
+        CreateCheck(cardDeclutter, "ShowMinimapBtn",
+            function() return L.CHECK_MINIMAPBTN end, function() return L.DESC_MINIMAPBTN end,
+            12, -94, function() return db.showMinimapButton ~= false end,
+            function(v) db.showMinimapButton = v; UpdateAlertControlButton() end, 320
+        )
+        CreateCheck(cardDeclutter, "ShowFloatBtn",
+            function() return L.CHECK_FLOATBTN end, function() return L.DESC_FLOATBTN end,
+            12, -124, function() return db.showFloatingButton ~= false end,
+            function(v) db.showFloatingButton = v; UpdateAlertControlButton() end, 320
+        )
+    end
 
     -- Tab switching logic
     local function SelectTab(idx)
@@ -2876,7 +3230,7 @@ local function CreateConfigFrame()
 
     -- Unit toggle button
     local unitBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    unitBtn:SetSize(185, 24)
+    unitBtn:SetSize(192, 24)
     unitBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 18, 44)
     local function UpdateUnitBtn()
         if db and db.unitSystem == "meters" then
@@ -2888,6 +3242,7 @@ local function CreateConfigFrame()
     unitBtn:SetScript("OnClick", function()
         db.unitSystem = (db.unitSystem == "meters") and "yards" or "meters"
         UpdateUnitBtn()
+        UpdatePreview()
         RefreshAllPlates()
     end)
     AttachTooltip(unitBtn, function()
@@ -2896,7 +3251,7 @@ local function CreateConfigFrame()
 
     -- Language toggle button
     local langBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    langBtn:SetSize(185, 24)
+    langBtn:SetSize(192, 24)
     langBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -18, 44)
     local function UpdateLangBtn()
         langBtn:SetText(L.BTN_LANG)
@@ -2914,30 +3269,23 @@ local function CreateConfigFrame()
     resetBtn:SetSize(150, 24)
     resetBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 18, 14)
     resetBtn:SetScript("OnClick", function()
-        db.offsetY           = defaults.offsetY
-        db.fontSize          = defaults.fontSize
-        db.fontPath          = defaults.fontPath
-        db.barTexture        = defaults.barTexture
-        db.fontOutline       = defaults.fontOutline
-        db.fontBold          = defaults.fontBold
-        db.fontShadow        = defaults.fontShadow
-        db.fontMonochrome    = defaults.fontMonochrome
-        db.invertBar         = defaults.invertBar
-        db.aggroGraphic      = defaults.aggroGraphic
-        db.hideInCombatSelf  = defaults.hideInCombatSelf
-        db.hideInCombatGroup = defaults.hideInCombatGroup
-        db.hideInCombatOther = defaults.hideInCombatOther
-        db.keepGroupAggro    = defaults.keepGroupAggro
-        db.smoothBar         = defaults.smoothBar
-        db.fadeNonTarget      = defaults.fadeNonTarget
-        db.hideFarMobs        = defaults.hideFarMobs
-        db.soundEnabled       = defaults.soundEnabled
-        db.showMinimapButton  = defaults.showMinimapButton
-        db.showFloatingButton = defaults.showFloatingButton
-        db.width              = defaults.width
-        db.height             = defaults.height
-        db.scale              = defaults.scale
-        db.updateRate         = defaults.updateRate
+        for key, value in pairs(defaults) do
+            db[key] = value
+        end
+        ApplyLanguage()
+        if alertControlFrame then
+            alertControlFrame:ClearAllPoints()
+            alertControlFrame:SetPoint(
+                db.alertButtonPoint,
+                UIParent,
+                db.alertButtonRelativePoint,
+                db.alertButtonX,
+                db.alertButtonY
+            )
+        end
+        UpdateMinimapButtonPosition()
+        ResetProximityAlertState()
+        ResetStealthNoticeState()
         UpdateAlertControlButton()
         f:Refresh()
         RefreshAllPlates()
@@ -2953,6 +3301,8 @@ local function CreateConfigFrame()
         f:Hide()
     end)
 
+    f.UpdatePreview = UpdatePreview
+
     f.Refresh = function(self)
         if titleWidget then titleWidget:SetText(L.CONFIG_TITLE) end
         SelectTab(activeTab)
@@ -2961,14 +3311,17 @@ local function CreateConfigFrame()
         end
         for _, s in ipairs(sliders) do s:Refresh() end
         for _, cb in ipairs(checkboxes) do cb:Refresh() end
+        UpdatePosBtn()
         UpdateFontSelectBtn()
         UpdateTextureSelectBtn()
+        UpdateTestBtns()
         fontMenu:Hide()
         texMenu:Hide()
         UpdateUnitBtn()
         UpdateLangBtn()
         resetBtn:SetText(L.BTN_RESET)
         closeBtn:SetText(L.BTN_CLOSE)
+        UpdatePreview()
     end
 
     f:SetScript("OnShow", function(self)
@@ -2981,6 +3334,57 @@ local function CreateConfigFrame()
 
     configFrame = f
     return f
+end
+
+local blizzOptionsRegistered = false
+local function RegisterBlizzardOptions()
+    if blizzOptionsRegistered then return end
+    blizzOptionsRegistered = true
+
+    local panel = CreateFrame("Frame", "AggroMeterOptionsPanel")
+
+    local logo = panel:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(42, 42)
+    logo:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -18)
+    logo:SetTexture(ADDON_ICON)
+
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 12, -2)
+    title:SetText("AggroMeter  |cff62d8ffv" .. ADDON_VERSION .. "|r")
+
+    local sub = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    sub:SetWidth(520)
+    sub:SetJustifyH("LEFT")
+    sub:SetText(L.OPT_PANEL_DESC)
+
+    local openBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    openBtn:SetSize(220, 28)
+    openBtn:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -22)
+    openBtn:SetText(L.OPT_OPEN_BTN)
+    openBtn:SetScript("OnClick", function()
+        if SettingsPanel and SettingsPanel:IsShown() and HideUIPanel then
+            pcall(HideUIPanel, SettingsPanel)
+        elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() and HideUIPanel then
+            pcall(HideUIPanel, InterfaceOptionsFrame)
+        end
+        if ToggleConfigFrame then
+            ToggleConfigFrame()
+        end
+    end)
+
+    panel:SetScript("OnShow", function()
+        sub:SetText(L.OPT_PANEL_DESC)
+        openBtn:SetText(L.OPT_OPEN_BTN)
+    end)
+
+    if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+        local category = Settings.RegisterCanvasLayoutCategory(panel, "AggroMeter")
+        Settings.RegisterAddOnCategory(category)
+    elseif InterfaceOptions_AddCategory then
+        panel.name = "AggroMeter"
+        InterfaceOptions_AddCategory(panel)
+    end
 end
 
 ToggleConfigFrame = function()
@@ -3067,8 +3471,9 @@ SlashCmdList.AGGROMETER = function(input)
     command = (command or ""):lower()
 
     if command == "" or command == "help" then
-        Print("/am config (open settings) | on | off | alerts [all|icon|off]")
-        Print("/am text | status [on|off] | warning [on|off] | sound [on|off] | stealthnotice [on|off] | pullalert [on|off]")
+        Print("/am config (open settings) | on | off | alerts [all|icon|off] | test [stealth]")
+        Print("/am text | status [on|off] | compact [on|off] | warning [on|off] | sound [on|off] | nativesound [on|off]")
+        Print("/am stealthnotice [on|off] | pullalert [on|off] | pos [below|above] | alpha <0.25-1.00>")
         Print("/am scale <0.75-1.50> | width <80-220> | height <4-20> | offsety <-50 to 50> | fontsize <6-24>")
         Print("/am font <friz|arial|morpheus|skurri|path> | rate <5-60> | unit [meters|yards] | lang [en|pt] | debug | reload")
         return
@@ -3092,7 +3497,77 @@ SlashCmdList.AGGROMETER = function(input)
         Print("disabled")
     elseif command == "text" then
         db.showText = not db.showText
+        RefreshAllPlates()
         Print("text " .. (db.showText and "on" or "off"))
+    elseif command == "compact" then
+        local choice = (arg or ""):lower()
+        if choice == "on" then
+            db.compactText = true
+        elseif choice == "off" then
+            db.compactText = false
+        elseif choice == "" then
+            db.compactText = not db.compactText
+        else
+            Print("usage: /am compact [on|off]")
+            return
+        end
+        RefreshAllPlates()
+        Print("compactText " .. (db.compactText and "on" or "off"))
+    elseif command == "pos" or command == "position" then
+        local choice = (arg or ""):lower()
+        if choice == "above" or choice == "top" then
+            db.barPosition = "above"
+        elseif choice == "below" or choice == "bottom" then
+            db.barPosition = "below"
+        elseif choice == "" then
+            db.barPosition = (db.barPosition == "above") and "below" or "above"
+        else
+            Print("usage: /am pos [below|above]")
+            return
+        end
+        if configFrame and configFrame:IsShown() then
+            configFrame:Refresh()
+        end
+        RefreshAllPlates()
+        Print("barPosition " .. db.barPosition)
+    elseif command == "alpha" or command == "opacity" then
+        local alpha = tonumber(arg)
+        if alpha then
+            db.barAlpha = Clamp(alpha, 0.25, 1.00)
+            if configFrame and configFrame:IsShown() then
+                configFrame:Refresh()
+            end
+            RefreshAllPlates()
+            Print(string.format("barAlpha %.2f", db.barAlpha))
+        else
+            Print("usage: /am alpha <0.25-1.00>")
+        end
+    elseif command == "nativesound" or command == "native" then
+        local choice = (arg or ""):lower()
+        if choice == "on" then
+            db.useNativeSounds = true
+        elseif choice == "off" then
+            db.useNativeSounds = false
+        elseif choice == "" then
+            db.useNativeSounds = not db.useNativeSounds
+        else
+            Print("usage: /am nativesound [on|off]")
+            return
+        end
+        lastSoundKey = nil
+        if configFrame and configFrame:IsShown() then
+            configFrame:Refresh()
+        end
+        Print("useNativeSounds " .. (db.useNativeSounds and "on" or "off"))
+    elseif command == "test" then
+        local choice = (arg or ""):lower()
+        if choice == "stealth" then
+            ShowStealthNotice(true)
+        else
+            local useMeters = db and db.unitSystem == "meters"
+            local unitLabel = useMeters and (L.UNIT_M or "M") or (L.UNIT_YD or "yd")
+            TriggerProximityBanner((L.ALERT_PREFIX or "AGGRO ALERT") .. " - 3 " .. unitLabel, "danger", "test-slash", true)
+        end
     elseif command == "status" then
         local choice = (arg or ""):lower()
         if choice == "on" then
@@ -3105,6 +3580,7 @@ SlashCmdList.AGGROMETER = function(input)
             Print("usage: /am status [on|off]")
             return
         end
+        RefreshAllPlates()
         Print("SAFE/CAUTION/DANGER text " .. (db.statusText and "on" or "off"))
     elseif command == "warning" then
         local choice = (arg or ""):lower()
@@ -3425,6 +3901,7 @@ end
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
@@ -3464,7 +3941,11 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         LoadRangeItems()
         LoadSpellRangeChecks()
         CreateAlertControl()
+        RegisterBlizzardOptions()
+        ScanVisibleNameplates()
         Print(string.format(L.LOGIN, ADDON_VERSION))
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        ScanVisibleNameplates()
     elseif event == "PLAYER_LEVEL_UP" then
         LoadSpellRangeChecks()
         RefreshAllPlates()
