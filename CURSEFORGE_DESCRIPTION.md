@@ -1,3 +1,5 @@
+![AggroMeter Hero Banner](https://raw.githubusercontent.com/Mynoush/AggroMeter/main/docs/screenshots/hero_banner.png)
+
 **AggroMeter** attaches a sleek, real-time proximity and pull-margin bar to hostile enemy nameplates—helping you judge safe movement space, avoid accidental body pulls in Hardcore runs, navigate crowded camps, and sneak past enemies more reliably.
 
 > **Important:** Make sure **Enemy Nameplates** are turned on in-game (`V` by default). Type `/am config`, visit **Options → AddOns → AggroMeter**, or Left-Click the custom AggroMeter radar icon on your minimap/screen to customize every detail.
@@ -13,6 +15,24 @@ Enemy aggro radius is normally invisible and changes dynamically based on level 
 * **Red (`DANGER`)** — Right on or inside the estimated aggro radius.
 
 This makes it especially useful for **Hardcore characters**, **Rogues & Druids** sneaking through dense camps or caves, and players navigating higher-level zones.
+
+---
+
+## Visual Showcase
+
+### Real-Time Proximity -> Pull Transition (English)
+
+![AggroMeter In-Game Experience (English UI)](https://raw.githubusercontent.com/Mynoush/AggroMeter/main/docs/screenshots/showcase_en.png)
+
+### Native Portuguese (PT-BR) & Metric Display
+
+![AggroMeter Visual em Jogo (PT-BR)](https://raw.githubusercontent.com/Mynoush/AggroMeter/main/docs/screenshots/showcase_pt.png)
+
+### Full In-Game Configuration UI (`/am config`)
+
+3 dedicated tabs (**Appearance**, **Alerts & Text**, **Visibility**), live slider controls, `LibSharedMedia-3.0` texture & font pickers, one-click **Meters / Yards** toggle, and instant **EN / PT-BR** language switching:
+
+![AggroMeter Settings GUI](https://raw.githubusercontent.com/Mynoush/AggroMeter/main/docs/screenshots/settings_gui.jpg)
 
 ---
 

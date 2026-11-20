@@ -1,3 +1,5 @@
+![AggroMeter Hero Banner](docs/screenshots/hero_banner.png)
+
 # AggroMeter
 
 **Nameplate Proximity & Pull-Radius Bar for World of Warcraft**
@@ -29,6 +31,24 @@
 ## Accuracy Note
 
 World of Warcraft addons do not receive exact coordinates or raw server-side aggro radii for hostile units. **AggroMeter** calculates safe-margin brackets dynamically from Blizzard's legal item, spell, and interaction distance checks paired with level-difference and stealth heuristics. Treat the display as an informational safety margin—especially on **Hardcore** characters, patrols, social pulls, or scripted NPCs with special truesight/abilities.
+
+---
+
+## Visual Showcase
+
+### Real-Time Proximity & Pull Transition (English UI)
+
+![AggroMeter In-Game Experience (English UI)](docs/screenshots/showcase_en.png)
+
+### Native Portuguese (PT-BR) & Metric Display
+
+![AggroMeter Visual em Jogo (Português PT-BR)](docs/screenshots/showcase_pt.png)
+
+### Full In-Game Configuration UI (`/am config`)
+
+3 dedicated tabs (**Appearance**, **Alerts & Text**, **Visibility**), live slider controls, `LibSharedMedia-3.0` texture and font pickers, one-click **Meters / Yards** toggle, and instant **EN / PT-BR** localization switching:
+
+![AggroMeter Settings GUI](docs/screenshots/settings_gui.jpg)
 
 ---
 
