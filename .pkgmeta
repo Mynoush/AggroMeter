@@ -5,3 +5,4 @@ ignore:
   - .gitignore
   - logo.png
   - docs
+  - .agents

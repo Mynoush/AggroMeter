@@ -4,3 +4,4 @@ Thumbs.db
 *.bak
 *.tmp
 logo.png
+.agents/
